@@ -1,8 +1,8 @@
 ai meter  Sep 1 to Sep 14                                                     updated 16:32
 ──────────────────────────────────────────────────────────────────────────────────────────
-› Claude default                         fresh │ Claude default  fresh  just now
+› Claude                                 fresh │ Claude  fresh  just now
   5h 91% left ↻ 3h 17m  7d 55% left ↻ 2d 5h │ 129.8M tok in   592.9k tok out   439 req
-  Codex default                        partial │
+  Codex                                partial │
   5h 100% left ↻ 2h  7d 31% left ↻ 4d 15h     │ Usage limits
                                                 │ 5h        █████████████░  91% left
                                                 │           reset in 3h 17m

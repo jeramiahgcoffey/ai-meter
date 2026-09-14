@@ -205,6 +205,16 @@ func TestResetRemainingOmitsEmptyUnits(t *testing.T) {
 	}
 }
 
+func TestTruncateDoesNotSplitUnicodeCharacters(t *testing.T) {
+	got := truncate("5h 91% left ↻ 3h", 14)
+	if !strings.Contains(got, "↻") || strings.Contains(got, "�") {
+		t.Fatalf("truncate split Unicode character: %q", got)
+	}
+	if width := lipgloss.Width(got); width != 14 {
+		t.Fatalf("truncated width = %d, want 14: %q", width, got)
+	}
+}
+
 func assertViewFits(t *testing.T, view string, width int) {
 	t.Helper()
 	for number, line := range strings.Split(view, "\n") {

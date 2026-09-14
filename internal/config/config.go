@@ -363,7 +363,7 @@ func discoverLocalProviders(home string) ([]Provider, []Detection) {
 			continue
 		}
 		id := localProviderID("codex-local", root, ".codex")
-		providers = append(providers, Provider{ID: id, Kind: "codex-local", Label: "Codex " + localHomeLabel(root, ".codex"), LocalRoot: root})
+		providers = append(providers, Provider{ID: id, Kind: "codex-local", Label: localProviderLabel("Codex", root, ".codex"), LocalRoot: root})
 		detections = append(detections, Detection{Kind: "codex-local", Source: root, Usable: true, Note: "subscription session metadata; auth values are never read"})
 	}
 	for _, root := range matchingProviderHomes(home, ".claude") {
@@ -371,7 +371,7 @@ func discoverLocalProviders(home string) ([]Provider, []Detection) {
 			continue
 		}
 		id := localProviderID("claude-local", root, ".claude")
-		providers = append(providers, Provider{ID: id, Kind: "claude-local", Label: "Claude " + localHomeLabel(root, ".claude"), LocalRoot: root})
+		providers = append(providers, Provider{ID: id, Kind: "claude-local", Label: localProviderLabel("Claude", root, ".claude"), LocalRoot: root})
 		detections = append(detections, Detection{Kind: "claude-local", Source: root, Usable: true, Note: "subscription session metadata; auth values are never read"})
 	}
 	return providers, detections
@@ -399,9 +399,16 @@ func localProviderID(prefix, root, base string) string {
 
 func localHomeLabel(path, base string) string {
 	if filepath.Base(path) == base {
-		return "default"
+		return ""
 	}
 	return strings.ReplaceAll(strings.TrimPrefix(filepath.Base(path), base+"-"), "-", " ")
+}
+
+func localProviderLabel(provider, path, base string) string {
+	if profile := localHomeLabel(path, base); profile != "" {
+		return provider + " " + profile
+	}
+	return provider
 }
 
 func hasAny(root string, names ...string) bool {

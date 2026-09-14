@@ -426,13 +426,24 @@ func age(value time.Time) string {
 }
 
 func truncate(value string, width int) string {
-	if len(value) <= width {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(value) <= width {
 		return value
 	}
-	if width < 2 {
-		return value[:width]
+	if width == 1 {
+		return "…"
 	}
-	return value[:width-1] + "…"
+	var result strings.Builder
+	for _, character := range value {
+		candidate := result.String() + string(character) + "…"
+		if lipgloss.Width(candidate) > width {
+			break
+		}
+		result.WriteRune(character)
+	}
+	return result.String() + "…"
 }
 
 func wrap(value string, width int) string {

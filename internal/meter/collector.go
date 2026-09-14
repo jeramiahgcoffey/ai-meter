@@ -3,6 +3,7 @@ package meter
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -43,9 +44,7 @@ func (c *Collector) Collect(ctx context.Context, period Period) Dashboard {
 		}
 		dashboard.Providers = append(dashboard.Providers, result)
 	}
-	sort.SliceStable(dashboard.Providers, func(i, j int) bool {
-		return dashboard.Providers[i].Label < dashboard.Providers[j].Label
-	})
+	sortProviders(dashboard.Providers)
 	return dashboard
 }
 
@@ -60,8 +59,28 @@ func (c *Collector) Offline(period Period) Dashboard {
 			dashboard.Providers = append(dashboard.Providers, result)
 		}
 	}
-	sort.SliceStable(dashboard.Providers, func(i, j int) bool {
-		return dashboard.Providers[i].Label < dashboard.Providers[j].Label
-	})
+	sortProviders(dashboard.Providers)
 	return dashboard
+}
+
+func sortProviders(providers []Snapshot) {
+	sort.SliceStable(providers, func(i, j int) bool {
+		leftRank := providerSortRank(providers[i].ID)
+		rightRank := providerSortRank(providers[j].ID)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return strings.ToLower(providers[i].Label) < strings.ToLower(providers[j].Label)
+	})
+}
+
+func providerSortRank(id string) int {
+	switch id {
+	case "codex-local", "claude-local":
+		return 0
+	}
+	if strings.HasPrefix(id, "codex-local-") || strings.HasPrefix(id, "claude-local-") {
+		return 2
+	}
+	return 1
 }

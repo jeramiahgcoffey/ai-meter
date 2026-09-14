@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.2 - 2026-09-14
+
+- Sort base Codex and Claude profiles above API accounts and alternate profiles.
+- Label base profiles `Codex` and `Claude` without the word `default`.
+- Keep selector truncation from splitting Unicode reset symbols.
+
 ## v0.1.1 - 2026-09-14
 
 - Add remaining-capacity bars to the usage-limit detail view.

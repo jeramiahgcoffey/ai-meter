@@ -102,6 +102,35 @@ func TestResolveDiscoversAlternateLocalHomesWithStableIDs(t *testing.T) {
 	}
 }
 
+func TestResolveNamesBaseLocalHomesWithoutDefault(t *testing.T) {
+	home := t.TempDir()
+	for _, path := range []string{
+		filepath.Join(home, ".codex", "sessions"),
+		filepath.Join(home, ".claude", "projects"),
+	} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".codex", "auth.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Resolve(ResolveOptions{HomeDir: home, WorkDir: t.TempDir(), LookupEnv: func(string) (string, bool) { return "", false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Config.Providers) != 2 {
+		t.Fatalf("providers = %+v", got.Config.Providers)
+	}
+	if got.Config.Providers[0].Label != "Codex" || got.Config.Providers[1].Label != "Claude" {
+		t.Fatalf("base profile labels = %+v", got.Config.Providers)
+	}
+}
+
 func writeTestConfig(t *testing.T, path string, cfg Config) {
 	t.Helper()
 	if err := Write(path, cfg); err != nil {

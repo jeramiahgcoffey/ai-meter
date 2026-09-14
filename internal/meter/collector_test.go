@@ -30,3 +30,24 @@ func TestCollectorKeepsPartialResultsAndUsesStaleCache(t *testing.T) {
 		t.Fatalf("stale fallback missing: %+v", got.Providers[0])
 	}
 }
+
+func TestCollectorSortsBaseProfilesBeforeAPIsAndAlternates(t *testing.T) {
+	collector := NewCollector([]Provider{
+		fakeProvider{Snapshot{ID: "codex-local-alt", Label: "Codex alt", Status: Fresh}},
+		fakeProvider{Snapshot{ID: "openai", Label: "OpenAI API", Status: Fresh}},
+		fakeProvider{Snapshot{ID: "claude-local", Label: "Claude", Status: Fresh}},
+		fakeProvider{Snapshot{ID: "claude-local-alt", Label: "Claude alt", Status: Fresh}},
+		fakeProvider{Snapshot{ID: "codex-local", Label: "Codex", Status: Fresh}},
+	}, nil)
+
+	got := collector.Collect(context.Background(), Period{})
+	want := []string{"Claude", "Codex", "OpenAI API", "Claude alt", "Codex alt"}
+	if len(got.Providers) != len(want) {
+		t.Fatalf("got %d providers, want %d", len(got.Providers), len(want))
+	}
+	for i, label := range want {
+		if got.Providers[i].Label != label {
+			t.Fatalf("provider %d = %q, want %q", i, got.Providers[i].Label, label)
+		}
+	}
+}

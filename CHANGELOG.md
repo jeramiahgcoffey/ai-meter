@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.0 - 2026-09-14
+
+- Add an in-app settings page and API account wizard.
+- Reload providers and usage after a settings change without restarting.
+- Use an adaptive light and dark terminal palette.
+- Align status, account statistics, and quota bars across the dashboard.
+- Add `ai-meter --version`.
+- Add contributor, security, ownership, issue, pull request, and dependency-update files.
+- Run formatting, vet, race tests, and builds in CI.
+
 ## v0.1.2 - 2026-09-14
 
 - Sort base Codex and Claude profiles above API accounts and alternate profiles.

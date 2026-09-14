@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose a provider, metric, workflow, or interface change.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: checkboxes
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can you not do with ai-meter today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected result
+      description: Describe the data or workflow you want to see.
+    validations:
+      required: true
+  - type: textarea
+    id: provider
+    attributes:
+      label: Provider documentation
+      description: For provider requests, link to the official usage or billing API.

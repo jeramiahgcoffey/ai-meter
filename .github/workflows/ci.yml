@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -25,11 +29,8 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Test
-        run: go test ./...
-
-      - name: Vet
-        run: go vet ./...
+      - name: Check
+        run: make check
 
       - name: Build
         run: go build ./cmd/ai-meter

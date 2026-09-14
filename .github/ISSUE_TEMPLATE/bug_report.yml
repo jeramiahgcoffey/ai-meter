@@ -1,0 +1,63 @@
+name: Bug report
+description: Report incorrect data, provider detection, or TUI behavior.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: checkboxes
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I removed credentials, OAuth values, account IDs, prompts, and responses.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Run `ai-meter --version`.
+      placeholder: ai-meter 0.2.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the operating system, architecture, terminal, and terminal size.
+      placeholder: macOS arm64, Ghostty, 120 by 30
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Codex
+        - Claude
+        - OpenAI API
+        - Anthropic API
+        - Multiple providers
+        - Not provider-specific
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the result and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the command and key sequence. Use sanitized paths and output.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Sanitized config doctor output
+      description: Run `ai-meter config doctor`, then remove private paths and identifiers.
+      render: text

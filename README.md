@@ -33,6 +33,10 @@ go run ./cmd/ai-meter --demo
 
 If you installed the binary, replace `go run ./cmd/ai-meter` in the examples below with `ai-meter`.
 
+Use the arrow keys or `j` and `k` to select a provider. Press `r` to refresh and `s` to open settings. In an 80-column terminal, press `Enter` to open the selected provider's details.
+
+The settings page lists detected profiles, loaded config files, and credential references. Press `a` to add an OpenAI or Anthropic organization account without leaving the TUI. See [Configure accounts in the TUI](docs/settings.md) for the complete flow.
+
 `ai-meter` detects `OPENAI_ADMIN_KEY` and `ANTHROPIC_ADMIN_KEY`. It also detects local `~/.codex`, `~/.codex-*`, `~/.claude`, and `~/.claude-*` homes when they contain the client marker and session directory. Use either admin variable to add organization API reporting without a config file:
 
 ```sh
@@ -128,7 +132,7 @@ Detected subscription homes also accept label overlays. The provider IDs come fr
 
 Use `credential_file` instead of `credential_env` if you keep an admin key in a mode `0600` file. Relative credential paths resolve from the config file. `ai-meter` refuses credential files that are readable by other users.
 
-The config stores a credential reference, never the secret. Press `r` to refresh. Use the arrow keys or `j` and `k` to select a provider. Press `Enter` for model details in an 80-column terminal, and press `q` to quit.
+The config stores a credential reference, never the secret. Press `q` to quit.
 
 Inspect every discovered source and merged config file without printing credentials:
 
@@ -168,8 +172,10 @@ The clean next provider is GitHub Copilot because GitHub now exposes [personal a
 ## Test and build
 
 ```sh
-go test ./...
-go build ./cmd/ai-meter
+make check
+make build
 ```
 
 Provider tests use local HTTP fixtures. They check authentication headers and wire-to-domain translation without sending real requests.
+
+See [Contributing](CONTRIBUTING.md) for the development workflow and [Security policy](SECURITY.md) for private vulnerability reporting.

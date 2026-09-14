@@ -13,34 +13,47 @@ import (
 )
 
 var (
-	ink      = lipgloss.Color("#DCE7F2")
-	muted    = lipgloss.Color("#71879B")
-	blue     = lipgloss.Color("#5DADE2")
-	sea      = lipgloss.Color("#52D3B0")
-	warn     = lipgloss.Color("#F4B860")
-	danger   = lipgloss.Color("#EE6C77")
-	panel    = lipgloss.Color("#243849")
-	title    = lipgloss.NewStyle().Foreground(ink).Bold(true)
-	subtle   = lipgloss.NewStyle().Foreground(muted)
-	selected = lipgloss.NewStyle().Foreground(blue).Bold(true)
-	divider  = lipgloss.NewStyle().Foreground(panel)
+	ink          = lipgloss.AdaptiveColor{Light: "#18212B", Dark: "#E6EDF3"}
+	muted        = lipgloss.AdaptiveColor{Light: "#52606D", Dark: "#8396A8"}
+	blue         = lipgloss.AdaptiveColor{Light: "#087F8C", Dark: "#55D6E2"}
+	sea          = lipgloss.AdaptiveColor{Light: "#08785B", Dark: "#78E0B2"}
+	warn         = lipgloss.AdaptiveColor{Light: "#9A5B00", Dark: "#F3B95F"}
+	danger       = lipgloss.AdaptiveColor{Light: "#B42332", Dark: "#FF727D"}
+	panel        = lipgloss.AdaptiveColor{Light: "#D5DEE7", Dark: "#2B3A48"}
+	title        = lipgloss.NewStyle().Foreground(ink).Bold(true)
+	subtle       = lipgloss.NewStyle().Foreground(muted)
+	selected     = lipgloss.NewStyle().Foreground(blue).Bold(true)
+	accent       = lipgloss.NewStyle().Foreground(blue)
+	success      = lipgloss.NewStyle().Foreground(sea)
+	failure      = lipgloss.NewStyle().Foreground(danger)
+	sectionTitle = lipgloss.NewStyle().Foreground(blue).Bold(true)
+	divider      = lipgloss.NewStyle().Foreground(panel)
 )
 
 type loader func() meter.Dashboard
 type loadedMsg meter.Dashboard
 
 type Model struct {
-	dashboard  meter.Dashboard
-	load       loader
-	selected   int
-	width      int
-	height     int
-	loading    bool
-	detailOnly bool
+	dashboard          meter.Dashboard
+	load               loader
+	selected           int
+	width              int
+	height             int
+	loading            bool
+	detailOnly         bool
+	screen             screen
+	settings           SettingsSnapshot
+	settingsController SettingsController
+	wizard             setupWizard
+	notice             string
 }
 
-func New(dashboard meter.Dashboard, reload loader) Model {
-	return Model{dashboard: dashboard, load: reload}
+func New(dashboard meter.Dashboard, reload loader, options ...Option) Model {
+	model := Model{dashboard: dashboard, load: reload}
+	for _, option := range options {
+		option(&model)
+	}
+	return model
 }
 
 func (m Model) Init() tea.Cmd { return nil }
@@ -50,9 +63,24 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
+		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
+		}
+		if m.screen == settingsScreen {
+			return m.updateSettings(msg)
+		}
+		if m.screen == setupScreen {
+			return m.updateSetup(msg)
+		}
+		switch msg.String() {
+		case "q":
+			return m, tea.Quit
+		case "s":
+			if m.settingsController.Load != nil {
+				m.loadSettings()
+				m.notice = ""
+				m.screen = settingsScreen
+			}
 		case "up", "k":
 			if m.selected > 0 {
 				m.selected--
@@ -89,6 +117,14 @@ func (m Model) View() string {
 	}
 	header := m.header()
 	contentHeight := max(1, m.height-4)
+	if m.screen == settingsScreen {
+		body := m.settingsView(m.width, contentHeight)
+		return header + "\n" + divider.Render(strings.Repeat("─", max(1, m.width))) + "\n" + body + "\n" + m.footer()
+	}
+	if m.screen == setupScreen {
+		body := m.setupView(m.width, contentHeight)
+		return header + "\n" + divider.Render(strings.Repeat("─", max(1, m.width))) + "\n" + body + "\n" + m.footer()
+	}
 	if m.detailOnly {
 		body := fitHeight(m.detail(m.width, contentHeight), contentHeight)
 		return header + "\n" + divider.Render(strings.Repeat("─", max(1, m.width))) + "\n" + body + "\n" + m.footer()
@@ -115,13 +151,31 @@ func (m Model) View() string {
 
 func (m Model) header() string {
 	name := title.Render("ai meter")
-	period := subtle.Render(fmt.Sprintf("%s to %s", m.dashboard.Period.Start.Format("Jan 2"), m.dashboard.Period.End.Format("Jan 2")))
-	status := subtle.Render(m.dashboard.GeneratedAt.Format("updated 15:04"))
-	if m.loading {
-		status = lipgloss.NewStyle().Foreground(warn).Render("refreshing...")
+	page := "usage"
+	if m.screen == settingsScreen {
+		page = "settings"
 	}
-	gap := max(1, m.width-lipgloss.Width(name)-lipgloss.Width(period)-lipgloss.Width(status)-4)
-	return " " + name + "  " + period + strings.Repeat(" ", gap) + status
+	if m.screen == setupScreen {
+		page = "add account"
+	}
+	left := " " + name + "  " + accent.Bold(true).Render(page)
+	statusText := m.dashboard.GeneratedAt.Format("updated 15:04")
+	statusStyle := subtle
+	if m.loading {
+		statusText = "refreshing..."
+		statusStyle = lipgloss.NewStyle().Foreground(warn)
+	}
+	if m.screen == dashboardScreen {
+		period := subtle.Render(fmt.Sprintf("%s to %s", m.dashboard.Period.Start.Format("Jan 2"), m.dashboard.Period.End.Format("Jan 2")))
+		candidate := left + "  " + period
+		if lipgloss.Width(candidate)+1+lipgloss.Width(statusText) <= m.width {
+			left = candidate
+		}
+	}
+	statusText = truncate(statusText, max(1, m.width-lipgloss.Width(left)-1))
+	status := statusStyle.Render(statusText)
+	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(status))
+	return left + strings.Repeat(" ", gap) + status
 }
 
 func (m Model) providerList(width, height int) string {
@@ -137,17 +191,19 @@ func (m Model) providerList(width, height int) string {
 		provider := m.dashboard.Providers[i]
 		cursor := "  "
 		labelStyle := lipgloss.NewStyle().Foreground(ink)
+		summaryStyle := subtle
 		if i == m.selected {
-			cursor = "› "
+			cursor = "▸ "
 			labelStyle = selected
+			summaryStyle = lipgloss.NewStyle().Foreground(ink)
 		}
-		status := statusStyle(provider.Status).Render(string(provider.Status))
+		status := statusStyle(provider.Status).Render("● " + string(provider.Status))
 		labelWidth := max(4, width-lipgloss.Width(status)-4)
 		renderedLabel := labelStyle.Render(truncate(provider.Label, labelWidth))
 		gap := max(1, width-2-lipgloss.Width(renderedLabel)-lipgloss.Width(status))
 		rows = append(rows, cursor+renderedLabel+strings.Repeat(" ", gap)+status)
 		summary := compactProviderSummaryAt(provider, now)
-		rows = append(rows, "  "+subtle.Render(truncate(summary, max(1, width-2))))
+		rows = append(rows, "  "+summaryStyle.Render(truncate(summary, max(1, width-2))))
 	}
 	return strings.Join(rows, "\n")
 }
@@ -158,15 +214,15 @@ func (m Model) detail(width, height int) string {
 	}
 	p := m.dashboard.Providers[m.selected]
 	lines := []string{
-		title.Render(truncate(p.Label, max(10, width-18))) + "  " + statusStyle(p.Status).Render(string(p.Status)) + subtle.Render("  "+age(p.ObservedAt)),
-		fmt.Sprintf("%s in   %s out   %s", formatValue(p.InputTokens), formatValue(p.OutputTokens), formatValue(p.Requests)),
+		providerHeader(p, width),
+		usageStats(p, width),
 	}
 	if p.Spend.State == meter.Known || p.Budget.State == meter.Known {
-		line := fmt.Sprintf("Spend %s   Budget %s", formatValue(p.Spend), formatValue(p.Budget))
+		stats := []labeledStat{{"Spend", formatValue(p.Spend)}, {"Budget", formatValue(p.Budget)}}
 		if p.Spend.State == meter.Known && p.Budget.State == meter.Known && p.Budget.Value > 0 {
-			line += fmt.Sprintf("   %.0f%%", p.Spend.Value/p.Budget.Value*100)
+			stats = append(stats, labeledStat{"Used", fmt.Sprintf("%.0f%%", p.Spend.Value/p.Budget.Value*100)})
 		}
-		lines = append(lines, line)
+		lines = append(lines, renderStats(stats, width))
 	}
 	if len(p.UsageWindows) > 0 {
 		lines = append(lines, "", title.Render("Usage limits"))
@@ -204,9 +260,31 @@ func (m Model) detail(width, height int) string {
 
 func (m Model) footer() string {
 	hint := "↑/↓ select   enter details   r refresh   q quit"
-	if m.detailOnly {
-		hint = "esc back   r refresh   q quit"
+	compactHint := "↑/↓ select   enter details   r refresh   q quit"
+	if m.settingsController.Load != nil {
+		hint = "↑/↓ select   enter details   r refresh   s settings   q quit"
+		compactHint = "↑/↓ select   r refresh   s settings   q quit"
 	}
+	if m.detailOnly {
+		hint = "esc back   r refresh   s settings   q quit"
+		compactHint = hint
+	}
+	if m.screen == settingsScreen {
+		hint = "a add API account   r reload   esc usage   q quit"
+		compactHint = "a add   r reload   esc back   q quit"
+	}
+	if m.screen == setupScreen {
+		hint = "enter next   ←/→ choose   esc back   ctrl+c quit"
+		compactHint = "enter next   esc back   ^c quit"
+		if m.wizard.step == reviewStep {
+			hint = "enter save   esc back   ctrl+c quit"
+			compactHint = "enter save   esc back   ^c quit"
+		}
+	}
+	if lipgloss.Width(hint)+1 > m.width {
+		hint = compactHint
+	}
+	hint = truncate(hint, max(1, m.width-1))
 	return divider.Render(strings.Repeat("─", max(1, m.width))) + "\n " + subtle.Render(hint)
 }
 
@@ -264,13 +342,14 @@ func usageWindowLineAt(window meter.UsageWindow, width int, now time.Time) strin
 	color := capacityColor(window.AvailablePercent)
 	nameWidth := min(12, max(2, width/4))
 	name := truncate(usageWindowName(window), nameWidth)
+	renderedName := lipgloss.NewStyle().Foreground(color).Render(fmt.Sprintf("%-*s", nameWidth, name))
 	percent := fmt.Sprintf("%.0f%% left", window.AvailablePercent)
 	reset := ""
 	if remaining := resetRemaining(window.ResetsAt, now); remaining != "" {
 		reset = "reset in " + remaining
 	}
 
-	fixedWidth := lipgloss.Width(name) + 2 + lipgloss.Width(percent)
+	fixedWidth := nameWidth + 2 + lipgloss.Width(percent)
 	if reset != "" {
 		fixedWidth += 2 + lipgloss.Width(reset)
 	}
@@ -279,7 +358,7 @@ func usageWindowLineAt(window meter.UsageWindow, width int, now time.Time) strin
 		barWidth = 0
 	}
 
-	parts := []string{lipgloss.NewStyle().Foreground(color).Render(name)}
+	parts := []string{renderedName}
 	if barWidth > 0 {
 		parts = append(parts, progressBar(window.AvailablePercent, barWidth))
 	}
@@ -288,6 +367,48 @@ func usageWindowLineAt(window meter.UsageWindow, width int, now time.Time) strin
 		parts = append(parts, subtle.Render(reset))
 	}
 	return strings.Join(parts, "  ")
+}
+
+type labeledStat struct {
+	label string
+	value string
+}
+
+func providerHeader(provider meter.Snapshot, width int) string {
+	meta := statusStyle(provider.Status).Render("● "+string(provider.Status)) + subtle.Render("  "+age(provider.ObservedAt))
+	nameWidth := max(4, width-lipgloss.Width(meta)-2)
+	name := title.Render(truncate(provider.Label, nameWidth))
+	gap := max(1, width-lipgloss.Width(name)-lipgloss.Width(meta))
+	return name + strings.Repeat(" ", gap) + meta
+}
+
+func usageStats(provider meter.Snapshot, width int) string {
+	stats := []labeledStat{
+		{"Input", compactOrDash(provider.InputTokens)},
+		{"Output", compactOrDash(provider.OutputTokens)},
+		{"Requests", compactOrDash(provider.Requests)},
+	}
+	return renderStats(stats, width)
+}
+
+func renderStats(stats []labeledStat, width int) string {
+	parts := make([]string, 0, len(stats))
+	for _, stat := range stats {
+		parts = append(parts, subtle.Render(stat.label)+" "+title.Render(stat.value))
+	}
+	line := strings.Join(parts, "   ")
+	if lipgloss.Width(line) <= width {
+		return line
+	}
+	compactParts := make([]string, 0, len(stats))
+	for _, stat := range stats {
+		label := stat.label
+		if len(label) > 3 {
+			label = label[:3]
+		}
+		compactParts = append(compactParts, subtle.Render(label)+" "+title.Render(stat.value))
+	}
+	return strings.Join(compactParts, "  ")
 }
 
 func progressBar(availablePercent float64, width int) string {
@@ -300,7 +421,7 @@ func progressBar(availablePercent float64, width int) string {
 		lipgloss.NewStyle().Foreground(panel).Render(strings.Repeat("░", width-filled))
 }
 
-func capacityColor(availablePercent float64) lipgloss.Color {
+func capacityColor(availablePercent float64) lipgloss.AdaptiveColor {
 	if availablePercent <= 0 {
 		return danger
 	}

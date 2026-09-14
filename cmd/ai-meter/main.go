@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +20,8 @@ import (
 	"github.com/jeramiahgcoffey/ai-meter/internal/ui"
 )
 
+var version string
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "setup" {
 		runSetup(os.Args[2:])
@@ -29,22 +33,29 @@ func main() {
 	}
 
 	var configPaths stringList
-	var demo, jsonOutput, offline bool
+	var demo, jsonOutput, offline, showVersion bool
 	flag.Var(&configPaths, "config", "additional JSON config path; repeat to merge")
 	flag.BoolVar(&demo, "demo", false, "show representative provider data")
 	flag.BoolVar(&jsonOutput, "json", false, "print a JSON snapshot instead of opening the TUI")
 	flag.BoolVar(&offline, "offline", false, "read cached snapshots without provider requests")
+	flag.BoolVar(&showVersion, "version", false, "print the ai-meter version")
 	flag.Parse()
+	if showVersion {
+		fmt.Println("ai-meter " + buildVersion())
+		return
+	}
 
 	period := currentMonth(time.Now())
 	var configured []meter.Provider
 	var configIssues []string
+	var resolution config.Resolution
+	var resolveErr error
 	if demo {
 		configured = providers.DemoProviders()
 	} else {
-		resolution, err := config.Resolve(config.ResolveOptions{Paths: configPaths})
-		if err != nil {
-			fatal(err)
+		resolution, resolveErr = config.Resolve(config.ResolveOptions{Paths: configPaths})
+		if resolveErr != nil {
+			fatal(resolveErr)
 		}
 		if len(resolution.Config.Providers) == 0 && !jsonOutput && !offline && terminal(os.Stdin) {
 			showDetections(resolution.Detections)
@@ -52,16 +63,16 @@ func main() {
 				if err := setup.Run(os.Stdin, os.Stdout, config.DefaultPath()); err != nil {
 					fatal(err)
 				}
-				resolution, err = config.Resolve(config.ResolveOptions{Paths: configPaths})
-				if err != nil {
-					fatal(err)
+				resolution, resolveErr = config.Resolve(config.ResolveOptions{Paths: configPaths})
+				if resolveErr != nil {
+					fatal(resolveErr)
 				}
 			}
 		}
 		configIssues = summarizeConfig(resolution)
-		configured, err = makeProviders(resolution.Config)
-		if err != nil {
-			fatal(err)
+		configured, resolveErr = makeProviders(resolution.Config)
+		if resolveErr != nil {
+			fatal(resolveErr)
 		}
 	}
 	collector := meter.NewCollector(configured, &meter.Cache{Dir: config.CacheDir()})
@@ -87,10 +98,79 @@ func main() {
 		}
 		return
 	}
-	program := tea.NewProgram(ui.New(dashboard, load), tea.WithAltScreen())
+	var uiOptions []ui.Option
+	if !demo {
+		settingsController := ui.SettingsController{
+			Load: func() ui.SettingsSnapshot {
+				return settingsSnapshot(resolution)
+			},
+			Save: func(draft ui.ProviderDraft) error {
+				account := setup.Account{
+					Kind: draft.Kind, Label: draft.Label, ID: draft.ID,
+					CredentialSource: draft.CredentialSource, CredentialRef: draft.CredentialRef,
+					MonthlyBudgetUSD: draft.MonthlyBudgetUSD,
+				}
+				if err := setup.Save(config.DefaultPath(), account); err != nil {
+					return err
+				}
+				nextResolution, err := config.Resolve(config.ResolveOptions{Paths: configPaths})
+				if err != nil {
+					return err
+				}
+				nextProviders, err := makeProviders(nextResolution.Config)
+				if err != nil {
+					return err
+				}
+				resolution = nextResolution
+				configIssues = summarizeConfig(resolution)
+				collector = meter.NewCollector(nextProviders, &meter.Cache{Dir: config.CacheDir()})
+				return nil
+			},
+		}
+		uiOptions = append(uiOptions, ui.WithSettings(settingsController))
+	}
+	program := tea.NewProgram(ui.New(dashboard, load, uiOptions...), tea.WithAltScreen())
 	if _, err := program.Run(); err != nil {
 		fatal(err)
 	}
+}
+
+func buildVersion() string {
+	if version != "" {
+		return strings.TrimPrefix(version, "v")
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return strings.TrimPrefix(info.Main.Version, "v")
+	}
+	return "dev"
+}
+
+func settingsSnapshot(resolution config.Resolution) ui.SettingsSnapshot {
+	snapshot := ui.SettingsSnapshot{ConfigPath: config.DefaultPath(), Files: append([]string(nil), resolution.Files...)}
+	configured := append([]config.Provider(nil), resolution.Config.Providers...)
+	sort.SliceStable(configured, func(i, j int) bool {
+		leftRank := meter.ProviderSortRank(configured[i].ID)
+		rightRank := meter.ProviderSortRank(configured[j].ID)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return strings.ToLower(configured[i].Label) < strings.ToLower(configured[j].Label)
+	})
+	for _, provider := range configured {
+		source := "detected"
+		if provider.LocalRoot != "" {
+			source = provider.LocalRoot
+		}
+		if provider.CredentialEnv != "" {
+			source = "$" + provider.CredentialEnv
+		}
+		if provider.CredentialFile != "" {
+			source = provider.CredentialFile
+		}
+		kind := strings.TrimSuffix(provider.Kind, "-local")
+		snapshot.Providers = append(snapshot.Providers, ui.SettingProvider{Label: provider.Label, Kind: kind, Source: source})
+	}
+	return snapshot
 }
 
 func makeProviders(cfg config.Config) ([]meter.Provider, error) {

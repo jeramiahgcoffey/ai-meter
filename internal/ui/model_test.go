@@ -51,6 +51,17 @@ func TestNarrowViewOpensModelDetails(t *testing.T) {
 	}
 }
 
+func TestDashboardFitsFortyColumnTerminal(t *testing.T) {
+	now := time.Now()
+	dashboard := meter.Dashboard{GeneratedAt: now, Period: meter.Period{Start: now, End: now}, Providers: []meter.Snapshot{{
+		ID: "claude-local", Label: "Claude with a long profile name", Status: meter.Fresh, ObservedAt: now,
+		UsageWindows: []meter.UsageWindow{{Label: "7d", AvailablePercent: 55, ResetsAt: now.Add(48 * time.Hour)}},
+	}}}
+	model := New(dashboard, nil)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
+	assertViewFits(t, updated.(Model).View(), 40)
+}
+
 func TestSelectionDoesNotChangeRenderedHeight(t *testing.T) {
 	now := time.Now()
 	busy := meter.Snapshot{

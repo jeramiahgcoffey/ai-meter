@@ -10,11 +10,71 @@ import (
 	"github.com/jeramiahgcoffey/ai-meter/internal/config"
 )
 
-func Run(input io.Reader, output io.Writer, path string) error {
+type Account struct {
+	Kind             string
+	Label            string
+	ID               string
+	CredentialSource string
+	CredentialRef    string
+	MonthlyBudgetUSD float64
+}
+
+func Save(path string, account Account) error {
+	provider, err := account.provider()
+	if err != nil {
+		return err
+	}
 	current, err := config.ReadFile(path)
 	if err != nil {
 		return err
 	}
+	updated := false
+	for i := range current.Providers {
+		if current.Providers[i].ID == provider.ID {
+			current.Providers[i] = provider
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		current.Providers = append(current.Providers, provider)
+	}
+	return config.Write(path, current)
+}
+
+func (account Account) provider() (config.Provider, error) {
+	kind := strings.ToLower(strings.TrimSpace(account.Kind))
+	if kind != "openai" && kind != "anthropic" {
+		return config.Provider{}, fmt.Errorf("provider must be openai or anthropic")
+	}
+	if strings.TrimSpace(account.Label) == "" {
+		return config.Provider{}, fmt.Errorf("label is required")
+	}
+	if strings.TrimSpace(account.ID) == "" {
+		return config.Provider{}, fmt.Errorf("account id is required")
+	}
+	if strings.TrimSpace(account.CredentialRef) == "" {
+		return config.Provider{}, fmt.Errorf("credential reference is required")
+	}
+	if account.MonthlyBudgetUSD < 0 {
+		return config.Provider{}, fmt.Errorf("budget must be a positive number")
+	}
+	provider := config.Provider{
+		ID: strings.TrimSpace(account.ID), Kind: kind, Label: strings.TrimSpace(account.Label),
+		MonthlyBudgetUSD: account.MonthlyBudgetUSD,
+	}
+	switch strings.ToLower(strings.TrimSpace(account.CredentialSource)) {
+	case "env":
+		provider.CredentialEnv = strings.TrimSpace(account.CredentialRef)
+	case "file":
+		provider.CredentialFile = strings.TrimSpace(account.CredentialRef)
+	default:
+		return config.Provider{}, fmt.Errorf("credential source must be env or file")
+	}
+	return provider, nil
+}
+
+func Run(input io.Reader, output io.Writer, path string) error {
 	reader := bufio.NewReader(input)
 	fmt.Fprintln(output, "ai-meter setup")
 	fmt.Fprintln(output, "This stores a credential reference, never the key itself.")
@@ -44,11 +104,11 @@ func Run(input io.Reader, output io.Writer, path string) error {
 	if err != nil {
 		return err
 	}
-	provider := config.Provider{ID: id, Kind: kind, Label: label}
+	account := Account{ID: id, Kind: kind, Label: label, CredentialSource: source}
 	if strings.EqualFold(source, "file") {
-		provider.CredentialFile, err = ask(reader, output, "Path to a mode-0600 key file", "")
+		account.CredentialRef, err = ask(reader, output, "Path to a mode-0600 key file", "")
 	} else {
-		provider.CredentialEnv, err = ask(reader, output, "Environment variable", defaultEnv)
+		account.CredentialRef, err = ask(reader, output, "Environment variable", defaultEnv)
 	}
 	if err != nil {
 		return err
@@ -58,28 +118,17 @@ func Run(input io.Reader, output io.Writer, path string) error {
 		return err
 	}
 	if budgetText != "" {
-		provider.MonthlyBudgetUSD, err = strconv.ParseFloat(budgetText, 64)
-		if err != nil || provider.MonthlyBudgetUSD <= 0 {
+		account.MonthlyBudgetUSD, err = strconv.ParseFloat(budgetText, 64)
+		if err != nil || account.MonthlyBudgetUSD <= 0 {
 			return fmt.Errorf("budget must be a positive number")
 		}
 	}
-	updated := false
-	for i := range current.Providers {
-		if current.Providers[i].ID == provider.ID {
-			current.Providers[i] = provider
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		current.Providers = append(current.Providers, provider)
-	}
-	if err := config.Write(path, current); err != nil {
+	if err := Save(path, account); err != nil {
 		return err
 	}
-	fmt.Fprintf(output, "Saved %s to %s\n", provider.Label, path)
-	if provider.CredentialEnv != "" {
-		fmt.Fprintf(output, "Set %s before refreshing usage.\n", provider.CredentialEnv)
+	fmt.Fprintf(output, "Saved %s to %s\n", account.Label, path)
+	if strings.EqualFold(account.CredentialSource, "env") {
+		fmt.Fprintf(output, "Set %s before refreshing usage.\n", account.CredentialRef)
 	}
 	return nil
 }

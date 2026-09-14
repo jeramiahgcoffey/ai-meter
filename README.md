@@ -1,8 +1,27 @@
 # ai-meter
 
+[![CI](https://github.com/jeramiahgcoffey/ai-meter/actions/workflows/ci.yml/badge.svg)](https://github.com/jeramiahgcoffey/ai-meter/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jeramiahgcoffey/ai-meter)](https://github.com/jeramiahgcoffey/ai-meter/releases/latest)
+[![License](https://img.shields.io/github/license/jeramiahgcoffey/ai-meter)](LICENSE)
+
 `ai-meter` puts AI spend and usage in one terminal dashboard. It supports OpenAI and Anthropic organization accounts, plus local Codex and Claude subscription usage metadata when those tools have written JSONL logs. It keeps dollars, tokens, requests, and provider-specific details separate, and it marks missing provider data instead of turning missing values into zero.
 
-![Terminal dashboard concept](docs/dashboard.txt)
+[See the terminal dashboard layout](docs/dashboard.txt).
+
+## Install
+
+With Go 1.24 or later:
+
+```sh
+go install github.com/jeramiahgcoffey/ai-meter/cmd/ai-meter@latest
+ai-meter
+```
+
+Go installs the binary in `GOBIN`, or in `GOPATH/bin` when `GOBIN` is unset. Add that directory to `PATH` if your shell cannot find `ai-meter`.
+
+You can also download the archive for your macOS or Linux architecture from the [latest release](https://github.com/jeramiahgcoffey/ai-meter/releases/latest), extract it, and put `ai-meter` in a directory on `PATH`.
+
+To update an installation made with Go, run the same `go install ...@latest` command again. Release-archive installations update by replacing the binary with the one from the newest release.
 
 ## Run the dashboard
 
@@ -11,6 +30,8 @@ Preview the UI without credentials:
 ```sh
 go run ./cmd/ai-meter --demo
 ```
+
+If you installed the binary, replace `go run ./cmd/ai-meter` in the examples below with `ai-meter`.
 
 `ai-meter` detects `OPENAI_ADMIN_KEY` and `ANTHROPIC_ADMIN_KEY`. It also detects local `~/.codex`, `~/.codex-*`, `~/.claude`, and `~/.claude-*` homes when they contain the client marker and session directory. Use either admin variable to add organization API reporting without a config file:
 

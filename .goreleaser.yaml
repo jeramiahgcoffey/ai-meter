@@ -1,0 +1,29 @@
+version: 2
+
+project_name: ai-meter
+
+builds:
+  - id: ai-meter
+    main: ./cmd/ai-meter
+    binary: ai-meter
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - ids:
+      - ai-meter
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt

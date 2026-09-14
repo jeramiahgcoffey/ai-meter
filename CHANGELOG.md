@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.1.1 - 2026-09-14
+
+- Add remaining-capacity bars to the usage-limit detail view.
+- Show the time until each limit resets in selector summaries.
+- Format reset countdowns as days, hours, and minutes.
+- Keep Fable visible by widening the selector when terminal space permits and removing duplicate reset times.
+
 ## v0.1.0 - 2026-09-14
 
 - Show live Codex 5-hour and 7-day subscription limits through the existing Codex login.

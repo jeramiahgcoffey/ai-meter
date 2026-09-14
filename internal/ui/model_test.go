@@ -135,6 +135,76 @@ func TestCodexPickerSummaryOmitsInternalLimitScope(t *testing.T) {
 	}
 }
 
+func TestPickerSummaryShowsTimeUntilReset(t *testing.T) {
+	now := time.Date(2026, time.September, 14, 12, 0, 0, 0, time.UTC)
+	provider := meter.Snapshot{Provider: "codex", UsageWindows: []meter.UsageWindow{
+		{Label: "5h", AvailablePercent: 78, ResetsAt: now.Add(2*time.Hour + 14*time.Minute)},
+		{Label: "7d", AvailablePercent: 45, ResetsAt: now.Add(2*24*time.Hour + 7*time.Hour + 30*time.Minute)},
+	}}
+
+	summary := compactProviderSummaryAt(provider, now)
+	if summary != "5h 78% left ↻ 2h 14m  7d 45% left ↻ 2d 7h" {
+		t.Fatalf("picker summary = %q", summary)
+	}
+}
+
+func TestPickerSummaryDoesNotRepeatSharedReset(t *testing.T) {
+	now := time.Date(2026, time.September, 14, 12, 0, 0, 0, time.UTC)
+	reset := now.Add(2*24*time.Hour + 7*time.Hour)
+	provider := meter.Snapshot{Provider: "claude", UsageWindows: []meter.UsageWindow{
+		{Label: "7d", Scope: "Claude", AvailablePercent: 45, ResetsAt: reset},
+		{Label: "7d", Scope: "Fable", AvailablePercent: 30, ResetsAt: reset},
+	}}
+
+	summary := compactProviderSummaryAt(provider, now)
+	if summary != "7d 45% left ↻ 2d 7h  Fable 7d 30% left" {
+		t.Fatalf("picker summary = %q", summary)
+	}
+}
+
+func TestProgressBarRepresentsRemainingCapacity(t *testing.T) {
+	bar := progressBar(50, 10)
+	if strings.Count(bar, "█") != 5 || strings.Count(bar, "░") != 5 {
+		t.Fatalf("50%% progress bar = %q", bar)
+	}
+	if got := lipgloss.Width(bar); got != 10 {
+		t.Fatalf("progress bar width = %d, want 10", got)
+	}
+}
+
+func TestUsageWindowLineFitsAndShowsResetCountdown(t *testing.T) {
+	now := time.Date(2026, time.September, 14, 12, 0, 0, 0, time.UTC)
+	window := meter.UsageWindow{
+		Label: "7d", Scope: "Fable", AvailablePercent: 46,
+		ResetsAt: now.Add(3*24*time.Hour + 8*time.Hour),
+	}
+	line := usageWindowLineAt(window, 56, now)
+	for _, want := range []string{"Fable 7d", "46% left", "reset in 3d 8h", "█", "░"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("usage window line does not contain %q: %q", want, line)
+		}
+	}
+	if got := lipgloss.Width(line); got > 56 {
+		t.Fatalf("usage window line is %d columns: %q", got, line)
+	}
+}
+
+func TestResetRemainingOmitsEmptyUnits(t *testing.T) {
+	now := time.Date(2026, time.September, 14, 12, 0, 0, 0, time.UTC)
+	for _, test := range []struct {
+		duration time.Duration
+		want     string
+	}{
+		{duration: 2 * time.Hour, want: "2h"},
+		{duration: 2 * 24 * time.Hour, want: "2d"},
+		{duration: 2*24*time.Hour + 7*time.Hour, want: "2d 7h"},
+	} {
+		if got := resetRemaining(now.Add(test.duration), now); got != test.want {
+			t.Errorf("resetRemaining(%s) = %q, want %q", test.duration, got, test.want)
+		}
+	}
+}
+
 func assertViewFits(t *testing.T, view string, width int) {
 	t.Helper()
 	for number, line := range strings.Split(view, "\n") {

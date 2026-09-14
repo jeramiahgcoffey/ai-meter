@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -101,7 +102,7 @@ func (m Model) View() string {
 	}
 	content := fitHeight(m.providerList(m.width, contentHeight), contentHeight)
 	if m.width >= 94 {
-		listWidth := min(56, m.width/2)
+		listWidth := min(72, max(48, m.width/2))
 		detailWidth := m.width - listWidth - 3
 		content = lipgloss.JoinHorizontal(lipgloss.Top,
 			lipgloss.NewStyle().Width(listWidth).Render(fitHeight(m.providerList(listWidth, contentHeight), contentHeight)),
@@ -125,6 +126,7 @@ func (m Model) header() string {
 
 func (m Model) providerList(width, height int) string {
 	var rows []string
+	now := time.Now()
 	visible := max(1, height/2)
 	start := 0
 	if m.selected >= visible {
@@ -144,7 +146,7 @@ func (m Model) providerList(width, height int) string {
 		renderedLabel := labelStyle.Render(truncate(provider.Label, labelWidth))
 		gap := max(1, width-2-lipgloss.Width(renderedLabel)-lipgloss.Width(status))
 		rows = append(rows, cursor+renderedLabel+strings.Repeat(" ", gap)+status)
-		summary := compactProviderSummary(provider)
+		summary := compactProviderSummaryAt(provider, now)
 		rows = append(rows, "  "+subtle.Render(truncate(summary, max(1, width-2))))
 	}
 	return strings.Join(rows, "\n")
@@ -168,8 +170,9 @@ func (m Model) detail(width, height int) string {
 	}
 	if len(p.UsageWindows) > 0 {
 		lines = append(lines, "", title.Render("Usage limits"))
+		now := time.Now()
 		for _, window := range p.UsageWindows {
-			lines = append(lines, usageWindowLine(window, width))
+			lines = append(lines, usageWindowLineAt(window, width, now))
 		}
 	}
 	if len(p.Details) > 0 {
@@ -215,15 +218,28 @@ func compactOrDash(value meter.Value) string {
 }
 
 func compactProviderSummary(provider meter.Snapshot) string {
+	return compactProviderSummaryAt(provider, time.Now())
+}
+
+func compactProviderSummaryAt(provider meter.Snapshot, now time.Time) string {
 	if len(provider.UsageWindows) > 0 {
 		var parts []string
+		seenResets := make(map[int64]bool)
 		limit := min(3, len(provider.UsageWindows))
 		for _, window := range provider.UsageWindows[:limit] {
 			name := usageWindowName(window)
 			if provider.Provider == "codex" {
 				name = window.Label
 			}
-			parts = append(parts, fmt.Sprintf("%s %.0f%% left", name, window.AvailablePercent))
+			part := fmt.Sprintf("%s %.0f%% left", name, window.AvailablePercent)
+			resetKey := window.ResetsAt.Unix()
+			if remaining := resetRemaining(window.ResetsAt, now); remaining != "" && !seenResets[resetKey] {
+				part += " ↻ " + remaining
+			}
+			if !window.ResetsAt.IsZero() {
+				seenResets[resetKey] = true
+			}
+			parts = append(parts, part)
 		}
 		if limit < len(provider.UsageWindows) {
 			parts = append(parts, fmt.Sprintf("+%d", len(provider.UsageWindows)-limit))
@@ -241,21 +257,89 @@ func compactProviderSummary(provider meter.Snapshot) string {
 }
 
 func usageWindowLine(window meter.UsageWindow, width int) string {
+	return usageWindowLineAt(window, width, time.Now())
+}
+
+func usageWindowLineAt(window meter.UsageWindow, width int, now time.Time) string {
+	color := capacityColor(window.AvailablePercent)
+	nameWidth := min(12, max(2, width/4))
+	name := truncate(usageWindowName(window), nameWidth)
+	percent := fmt.Sprintf("%.0f%% left", window.AvailablePercent)
 	reset := ""
-	if !window.ResetsAt.IsZero() && width >= 48 {
-		reset = "  reset " + window.ResetsAt.Local().Format("Jan 2")
+	if remaining := resetRemaining(window.ResetsAt, now); remaining != "" {
+		reset = "reset in " + remaining
 	}
-	color := sea
-	if window.AvailablePercent <= 20 {
-		color = warn
+
+	fixedWidth := lipgloss.Width(name) + 2 + lipgloss.Width(percent)
+	if reset != "" {
+		fixedWidth += 2 + lipgloss.Width(reset)
 	}
-	if window.AvailablePercent <= 0 {
-		color = danger
+	barWidth := min(14, width-fixedWidth-2)
+	if barWidth < 4 {
+		barWidth = 0
 	}
-	nameWidth := width - 12 - lipgloss.Width(reset)
-	name := truncate(usageWindowName(window), max(2, nameWidth))
-	usage := fmt.Sprintf("%s %.0f%% left", name, window.AvailablePercent)
-	return lipgloss.NewStyle().Foreground(color).Render(usage) + reset
+
+	parts := []string{lipgloss.NewStyle().Foreground(color).Render(name)}
+	if barWidth > 0 {
+		parts = append(parts, progressBar(window.AvailablePercent, barWidth))
+	}
+	parts = append(parts, lipgloss.NewStyle().Foreground(color).Render(percent))
+	if reset != "" && lipgloss.Width(strings.Join(parts, "  "))+2+lipgloss.Width(reset) <= width {
+		parts = append(parts, subtle.Render(reset))
+	}
+	return strings.Join(parts, "  ")
+}
+
+func progressBar(availablePercent float64, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	availablePercent = min(100, max(0, availablePercent))
+	filled := int(math.Round(availablePercent / 100 * float64(width)))
+	return lipgloss.NewStyle().Foreground(capacityColor(availablePercent)).Render(strings.Repeat("█", filled)) +
+		lipgloss.NewStyle().Foreground(panel).Render(strings.Repeat("░", width-filled))
+}
+
+func capacityColor(availablePercent float64) lipgloss.Color {
+	if availablePercent <= 0 {
+		return danger
+	}
+	if availablePercent <= 20 {
+		return warn
+	}
+	return sea
+}
+
+func resetRemaining(resetsAt, now time.Time) string {
+	if resetsAt.IsZero() {
+		return ""
+	}
+	remaining := resetsAt.Sub(now)
+	if remaining <= 0 {
+		return "now"
+	}
+	remaining = remaining.Truncate(time.Minute)
+	days := int(remaining / (24 * time.Hour))
+	remaining -= time.Duration(days) * 24 * time.Hour
+	hours := int(remaining / time.Hour)
+	remaining -= time.Duration(hours) * time.Hour
+	minutes := int(remaining / time.Minute)
+	if days > 0 {
+		if hours == 0 {
+			return fmt.Sprintf("%dd", days)
+		}
+		return fmt.Sprintf("%dd %dh", days, hours)
+	}
+	if hours > 0 {
+		if minutes == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
+	if minutes > 0 {
+		return fmt.Sprintf("%dm", minutes)
+	}
+	return "<1m"
 }
 
 func usageWindowName(window meter.UsageWindow) string {

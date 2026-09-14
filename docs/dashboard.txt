@@ -1,26 +1,17 @@
-ai meter  Sep 1 to Sep 14                              updated 15:04
-────────────────────────────────────────────────────────────────────
-› Claude API               fresh │ Claude API
-  ━━━━━━━━━━━━━───────────   51% │ fresh  just now
-  $38.44              3.8M in    │
-                                │ Spend     $38.44
-  OpenAI API                fresh │ Budget    $75.00
-  ━━━━━━━━━━━━━━━━━───────   76% │ Input     3.8M tok
-  $91.72              8.9M in    │ Output    492.8k tok
-────────────────────────────────────────────────────────────────────
- ↑/↓ select   r refresh   q quit
+ai meter  Sep 1 to Sep 14                                                     updated 16:32
+──────────────────────────────────────────────────────────────────────────────────────────
+› Claude default                         fresh │ Claude default  fresh  just now
+  5h 91% left ↻ 3h 17m  7d 55% left ↻ 2d 5h │ 129.8M tok in   592.9k tok out   439 req
+  Codex default                        partial │
+  5h 100% left ↻ 2h  7d 31% left ↻ 4d 15h     │ Usage limits
+                                                │ 5h        █████████████░  91% left
+                                                │           reset in 3h 17m
+                                                │ 7d        ████████░░░░░░  55% left
+                                                │           reset in 2d 5h
+                                                │ Fable 7d  ██████████████  100% left
+──────────────────────────────────────────────────────────────────────────────────────────
+ ↑/↓ select   enter details   r refresh   q quit
 
-Press Enter in a compact terminal:
-
-Claude API
-fresh  just now
-
-Spend     $38.44
-Budget    $75.00
-Input     3.8M tok
-Output    492.8k tok
-
-Models
-Model                        Input    Output Requests
-claude-fable-5-1              2.6M    341.0k        -
-claude-opus-5                 1.2M    151.8k        -
+The filled portion of each bar is the capacity that remains. Amber marks 20%
+or less. Coral marks an exhausted limit. The selector uses `↻` before the time
+remaining until a limit resets.

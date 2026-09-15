@@ -111,7 +111,7 @@ func TestSelectionDoesNotChangeRenderedHeight(t *testing.T) {
 func TestQuotaDisplayUsesOneRemainingPercentage(t *testing.T) {
 	now := time.Now()
 	provider := meter.Snapshot{
-		ID: "codex", Label: "Codex", Status: meter.Fresh, ObservedAt: now,
+		ID: "claude", Provider: "claude", Label: "Claude", Status: meter.Fresh, ObservedAt: now,
 		InputTokens: meter.KnownValue(10, "tokens"), OutputTokens: meter.KnownValue(2, "tokens"), Requests: meter.KnownValue(1, "requests"),
 		UsageWindows: []meter.UsageWindow{
 			{Label: "5h", UsedPercent: 22, AvailablePercent: 78},
@@ -123,7 +123,7 @@ func TestQuotaDisplayUsesOneRemainingPercentage(t *testing.T) {
 	model := New(dashboard, nil)
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 110, Height: 24})
 	view := updated.(Model).View()
-	for _, want := range []string{"5h 78% left", "7d 45% left", "Fable 7d 46% left"} {
+	for _, want := range []string{"7d", "45% left", "Fable 7d", "46% left"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view does not contain %q:\n%s", want, view)
 		}
@@ -133,6 +133,10 @@ func TestQuotaDisplayUsesOneRemainingPercentage(t *testing.T) {
 			t.Fatalf("view contains redundant quota label %q:\n%s", redundant, view)
 		}
 	}
+	selector := strings.Split(view, "│")[0]
+	if strings.Contains(selector, "5h") || strings.Contains(selector, "78% left") {
+		t.Fatalf("selector included a non-weekly summary:\n%s", selector)
+	}
 }
 
 func TestCodexPickerSummaryOmitsInternalLimitScope(t *testing.T) {
@@ -141,8 +145,23 @@ func TestCodexPickerSummaryOmitsInternalLimitScope(t *testing.T) {
 		{Label: "7d", Scope: "codex", AvailablePercent: 45},
 	}}
 	summary := compactProviderSummary(provider)
-	if summary != "5h 78% left  7d 45% left" {
+	if summary != "7d 45% left" {
 		t.Fatalf("Codex picker summary = %q", summary)
+	}
+}
+
+func TestSubscriptionPickerPercentagesUseTheSameColumn(t *testing.T) {
+	now := time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)
+	claude := meter.Snapshot{Provider: "claude", UsageWindows: []meter.UsageWindow{{
+		Label: "7d", Scope: "Claude", WindowMinutes: 10080, AvailablePercent: 20,
+	}}}
+	codex := meter.Snapshot{Provider: "codex", UsageWindows: []meter.UsageWindow{{
+		Label: "7d", Scope: "codex", LimitID: "codex", WindowMinutes: 10080, AvailablePercent: 9,
+	}}}
+	claudeSummary := renderedProviderSummaryAt(claude, 60, now)
+	codexSummary := renderedProviderSummaryAt(codex, 60, now)
+	if strings.Index(claudeSummary, "%") != strings.Index(codexSummary, "%") {
+		t.Fatalf("picker percentages do not align:\n%q\n%q", claudeSummary, codexSummary)
 	}
 }
 
@@ -154,7 +173,7 @@ func TestPickerSummaryShowsTimeUntilReset(t *testing.T) {
 	}}
 
 	summary := compactProviderSummaryAt(provider, now)
-	if summary != "5h 78% left ↻ 2h 14m  7d 45% left ↻ 2d 7h" {
+	if summary != "7d 45% left ↻ 2d 7h" {
 		t.Fatalf("picker summary = %q", summary)
 	}
 }
@@ -173,6 +192,24 @@ func TestPickerSummaryDoesNotRepeatSharedReset(t *testing.T) {
 	}
 }
 
+func TestPickerSummaryKeepsFableWhenWeeklyResetsDiffer(t *testing.T) {
+	now := time.Date(2026, time.September, 15, 12, 0, 0, 0, time.UTC)
+	provider := meter.Snapshot{Provider: "claude", UsageWindows: []meter.UsageWindow{
+		{Label: "7d", Scope: "Claude", WindowMinutes: 10080, AvailablePercent: 99, ResetsAt: now.Add(6*24*time.Hour + 18*time.Hour)},
+		{Label: "7d", Scope: "Fable", LimitID: "claude:model:fable", WindowMinutes: 10080, AvailablePercent: 100, ResetsAt: now.Add(6*24*time.Hour + 19*time.Hour)},
+	}}
+
+	summary := renderedProviderSummaryAt(provider, 53, now)
+	for _, want := range []string{"7d", "99% left", "Fable 7d", "100% left"} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("53-column selector summary dropped %q: %q", want, summary)
+		}
+	}
+	if got := lipgloss.Width(summary); got > 53 {
+		t.Fatalf("selector summary width = %d, want <= 53: %q", got, summary)
+	}
+}
+
 func TestProgressBarRepresentsRemainingCapacity(t *testing.T) {
 	bar := progressBar(50, 10)
 	if strings.Count(bar, "█") != 5 || strings.Count(bar, "░") != 5 {
@@ -181,6 +218,83 @@ func TestProgressBarRepresentsRemainingCapacity(t *testing.T) {
 	if got := lipgloss.Width(bar); got != 10 {
 		t.Fatalf("progress bar width = %d, want 10", got)
 	}
+}
+
+func TestCapacityTierMakesLowLimitsVisibleBeforeExhaustion(t *testing.T) {
+	for _, test := range []struct {
+		remaining float64
+		want      capacityTier
+	}{
+		{remaining: 26, want: capacityHealthy},
+		{remaining: 25, want: capacityWarning},
+		{remaining: 11, want: capacityWarning},
+		{remaining: 10, want: capacityCritical},
+		{remaining: 0, want: capacityCritical},
+	} {
+		if got := capacityTierFor(test.remaining); got != test.want {
+			t.Errorf("capacityTierFor(%v) = %v, want %v", test.remaining, got, test.want)
+		}
+	}
+}
+
+func TestDashShowsApplicableLimitsForRecentlyActiveSubscriptions(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-34 * time.Minute)
+	dashboard := meter.Dashboard{GeneratedAt: now, Providers: []meter.Snapshot{
+		{
+			ID: "claude-local", Provider: "claude", Label: "Claude", Status: meter.Fresh, ObservedAt: now, LastActivityAt: &recent,
+			UsageWindows: []meter.UsageWindow{
+				{Label: "5h", Scope: "Claude", WindowMinutes: 300, AvailablePercent: 72, ResetsAt: now.Add(3 * time.Hour)},
+				{Label: "7d", Scope: "Claude", WindowMinutes: 10080, AvailablePercent: 50},
+				{Label: "7d", Scope: "Fable", LimitID: "claude:model:fable", WindowMinutes: 10080, AvailablePercent: 9, ResetsAt: now.Add(49 * time.Hour)},
+			},
+		},
+	}}
+	model := New(dashboard, nil)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 72, Height: 22})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	view := updated.(Model).View()
+	for _, want := range []string{"Active capacity", "Claude", "active 34m ago", "5h", "72% left", "Fable 7d", "9% left", "↻ 2d"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("dash does not contain %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "50% left") {
+		t.Fatalf("dash included generic Claude 7-day limit:\n%s", view)
+	}
+	assertViewFits(t, view, 72)
+}
+
+func TestDashEmptyStateDoesNotUseRefreshTimeAsActivity(t *testing.T) {
+	now := time.Now()
+	dashboard := meter.Dashboard{GeneratedAt: now, Providers: []meter.Snapshot{{
+		ID: "codex-local", Provider: "codex", Label: "Codex", Status: meter.Fresh, ObservedAt: now,
+	}}}
+	model := New(dashboard, nil)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 48, Height: 16})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	view := updated.(Model).View()
+	if !strings.Contains(view, "No local subscription activity") {
+		t.Fatalf("dash inferred activity from refresh time:\n%s", view)
+	}
+	assertViewFits(t, view, 48)
+}
+
+func TestActiveDashFitsFortyColumnTerminal(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-time.Hour)
+	dashboard := meter.Dashboard{GeneratedAt: now, Providers: []meter.Snapshot{{
+		ID: "codex-local", Provider: "codex", Label: "Codex with a long profile name", Status: meter.Fresh,
+		ObservedAt: now, LastActivityAt: &recent,
+		UsageWindows: []meter.UsageWindow{{
+			Label: "7d", Scope: "codex", LimitID: "codex", WindowMinutes: 10080,
+			AvailablePercent: 8, ResetsAt: now.Add(2*24*time.Hour + 7*time.Hour),
+		}},
+	}}}
+	model := New(dashboard, nil)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 40, Height: 16})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	assertViewFits(t, updated.(Model).View(), 40)
 }
 
 func TestUsageWindowLineFitsAndShowsResetCountdown(t *testing.T) {

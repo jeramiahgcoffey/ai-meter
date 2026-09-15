@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.0 - 2026-09-15
+
+- Add an active-capacity dashboard for local subscriptions used in the last five hours.
+- Show weekly limits in selector summaries, including both Claude's general and Fable 7-day limits.
+- Sort account and settings lists alphabetically by label.
+- Align selector quota fields and color low remaining capacity orange or red.
+- Preserve scoped Codex limits and record recent activity from local usage events.
+
 ## v0.2.0 - 2026-09-14
 
 - Add an in-app settings page and API account wizard.

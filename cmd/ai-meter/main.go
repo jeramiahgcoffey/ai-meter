@@ -149,12 +149,12 @@ func settingsSnapshot(resolution config.Resolution) ui.SettingsSnapshot {
 	snapshot := ui.SettingsSnapshot{ConfigPath: config.DefaultPath(), Files: append([]string(nil), resolution.Files...)}
 	configured := append([]config.Provider(nil), resolution.Config.Providers...)
 	sort.SliceStable(configured, func(i, j int) bool {
-		leftRank := meter.ProviderSortRank(configured[i].ID)
-		rightRank := meter.ProviderSortRank(configured[j].ID)
-		if leftRank != rightRank {
-			return leftRank < rightRank
+		leftLabel := strings.ToLower(configured[i].Label)
+		rightLabel := strings.ToLower(configured[j].Label)
+		if leftLabel != rightLabel {
+			return leftLabel < rightLabel
 		}
-		return strings.ToLower(configured[i].Label) < strings.ToLower(configured[j].Label)
+		return configured[i].ID < configured[j].ID
 	})
 	for _, provider := range configured {
 		source := "detected"

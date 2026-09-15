@@ -15,24 +15,22 @@ import (
 	"github.com/jeramiahgcoffey/ai-meter/internal/meter"
 )
 
-func effectiveUsageWindows(windows []meter.UsageWindow) []meter.UsageWindow {
-	byDuration := make(map[int64]meter.UsageWindow)
-	for _, window := range windows {
-		current, exists := byDuration[window.WindowMinutes]
-		if !exists || window.UsedPercent > current.UsedPercent {
-			byDuration[window.WindowMinutes] = window
-		}
+func localScanStart(period meter.Period) time.Time {
+	lookbackStart := period.End.Add(-meter.RecentActivityWindow)
+	if lookbackStart.Before(period.Start) {
+		return lookbackStart
 	}
-	minutes := make([]int64, 0, len(byDuration))
-	for duration := range byDuration {
-		minutes = append(minutes, duration)
+	return period.Start
+}
+
+func noteLocalActivity(snapshot *meter.Snapshot, at, end time.Time) {
+	if at.IsZero() || at.After(end) {
+		return
 	}
-	sort.Slice(minutes, func(i, j int) bool { return minutes[i] < minutes[j] })
-	result := make([]meter.UsageWindow, 0, len(minutes))
-	for _, duration := range minutes {
-		result = append(result, byDuration[duration])
+	if snapshot.LastActivityAt == nil || at.After(*snapshot.LastActivityAt) {
+		value := at
+		snapshot.LastActivityAt = &value
 	}
-	return result
 }
 
 const maxLocalLogLine = 64 * 1024 * 1024

@@ -31,7 +31,7 @@ func TestCollectorKeepsPartialResultsAndUsesStaleCache(t *testing.T) {
 	}
 }
 
-func TestCollectorSortsBaseProfilesBeforeAPIsAndAlternates(t *testing.T) {
+func TestCollectorSortsProvidersAlphabetically(t *testing.T) {
 	collector := NewCollector([]Provider{
 		fakeProvider{Snapshot{ID: "codex-local-alt", Label: "Codex alt", Status: Fresh}},
 		fakeProvider{Snapshot{ID: "openai", Label: "OpenAI API", Status: Fresh}},
@@ -41,7 +41,7 @@ func TestCollectorSortsBaseProfilesBeforeAPIsAndAlternates(t *testing.T) {
 	}, nil)
 
 	got := collector.Collect(context.Background(), Period{})
-	want := []string{"Claude", "Codex", "OpenAI API", "Claude alt", "Codex alt"}
+	want := []string{"Claude", "Claude alt", "Codex", "Codex alt", "OpenAI API"}
 	if len(got.Providers) != len(want) {
 		t.Fatalf("got %d providers, want %d", len(got.Providers), len(want))
 	}

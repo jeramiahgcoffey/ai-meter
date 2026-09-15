@@ -17,8 +17,8 @@ var (
 	muted        = lipgloss.AdaptiveColor{Light: "#52606D", Dark: "#8396A8"}
 	blue         = lipgloss.AdaptiveColor{Light: "#087F8C", Dark: "#55D6E2"}
 	sea          = lipgloss.AdaptiveColor{Light: "#08785B", Dark: "#78E0B2"}
-	warn         = lipgloss.AdaptiveColor{Light: "#9A5B00", Dark: "#F3B95F"}
-	danger       = lipgloss.AdaptiveColor{Light: "#B42332", Dark: "#FF727D"}
+	warn         = lipgloss.AdaptiveColor{Light: "#B54708", Dark: "#FF9F43"}
+	danger       = lipgloss.AdaptiveColor{Light: "#B42332", Dark: "#FF5F6D"}
 	panel        = lipgloss.AdaptiveColor{Light: "#D5DEE7", Dark: "#2B3A48"}
 	title        = lipgloss.NewStyle().Foreground(ink).Bold(true)
 	subtle       = lipgloss.NewStyle().Foreground(muted)
@@ -46,6 +46,7 @@ type Model struct {
 	settingsController SettingsController
 	wizard             setupWizard
 	notice             string
+	returnScreen       screen
 }
 
 func New(dashboard meter.Dashboard, reload loader, options ...Option) Model {
@@ -79,7 +80,15 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.settingsController.Load != nil {
 				m.loadSettings()
 				m.notice = ""
+				m.returnScreen = m.screen
 				m.screen = settingsScreen
+			}
+		case "d":
+			if m.screen == dashScreen {
+				m.screen = dashboardScreen
+			} else {
+				m.detailOnly = false
+				m.screen = dashScreen
 			}
 		case "up", "k":
 			if m.selected > 0 {
@@ -95,11 +104,15 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, func() tea.Msg { return loadedMsg(m.load()) }
 			}
 		case "enter":
-			if len(m.dashboard.Providers) > 0 && m.width < 94 {
+			if m.screen == dashboardScreen && len(m.dashboard.Providers) > 0 && m.width < 94 {
 				m.detailOnly = !m.detailOnly
 			}
 		case "esc":
-			m.detailOnly = false
+			if m.screen == dashScreen {
+				m.screen = dashboardScreen
+			} else {
+				m.detailOnly = false
+			}
 		}
 	case loadedMsg:
 		m.dashboard = meter.Dashboard(msg)
@@ -123,6 +136,10 @@ func (m Model) View() string {
 	}
 	if m.screen == setupScreen {
 		body := m.setupView(m.width, contentHeight)
+		return header + "\n" + divider.Render(strings.Repeat("─", max(1, m.width))) + "\n" + body + "\n" + m.footer()
+	}
+	if m.screen == dashScreen {
+		body := fitHeight(m.dashView(m.width, contentHeight, time.Now()), contentHeight)
 		return header + "\n" + divider.Render(strings.Repeat("─", max(1, m.width))) + "\n" + body + "\n" + m.footer()
 	}
 	if m.detailOnly {
@@ -158,6 +175,9 @@ func (m Model) header() string {
 	if m.screen == setupScreen {
 		page = "add account"
 	}
+	if m.screen == dashScreen {
+		page = "dash"
+	}
 	left := " " + name + "  " + accent.Bold(true).Render(page)
 	statusText := m.dashboard.GeneratedAt.Format("updated 15:04")
 	statusStyle := subtle
@@ -191,19 +211,17 @@ func (m Model) providerList(width, height int) string {
 		provider := m.dashboard.Providers[i]
 		cursor := "  "
 		labelStyle := lipgloss.NewStyle().Foreground(ink)
-		summaryStyle := subtle
 		if i == m.selected {
 			cursor = "▸ "
 			labelStyle = selected
-			summaryStyle = lipgloss.NewStyle().Foreground(ink)
 		}
 		status := statusStyle(provider.Status).Render("● " + string(provider.Status))
 		labelWidth := max(4, width-lipgloss.Width(status)-4)
 		renderedLabel := labelStyle.Render(truncate(provider.Label, labelWidth))
 		gap := max(1, width-2-lipgloss.Width(renderedLabel)-lipgloss.Width(status))
 		rows = append(rows, cursor+renderedLabel+strings.Repeat(" ", gap)+status)
-		summary := compactProviderSummaryAt(provider, now)
-		rows = append(rows, "  "+summaryStyle.Render(truncate(summary, max(1, width-2))))
+		summary := renderedProviderSummaryAt(provider, max(1, width-2), now)
+		rows = append(rows, "  "+summary)
 	}
 	return strings.Join(rows, "\n")
 }
@@ -227,7 +245,7 @@ func (m Model) detail(width, height int) string {
 	if len(p.UsageWindows) > 0 {
 		lines = append(lines, "", title.Render("Usage limits"))
 		now := time.Now()
-		for _, window := range p.UsageWindows {
+		for _, window := range detailUsageWindows(p) {
 			lines = append(lines, usageWindowLineAt(window, width, now))
 		}
 	}
@@ -269,8 +287,16 @@ func (m Model) footer() string {
 		hint = "esc back   r refresh   s settings   q quit"
 		compactHint = hint
 	}
+	if m.screen == dashScreen {
+		hint = "d all accounts   r refresh   q quit"
+		compactHint = hint
+		if m.settingsController.Load != nil {
+			hint = "d all accounts   r refresh   s settings   q quit"
+			compactHint = "d accounts   r refresh   s settings   q quit"
+		}
+	}
 	if m.screen == settingsScreen {
-		hint = "a add API account   r reload   esc usage   q quit"
+		hint = "a add API account   r reload   esc back   q quit"
 		compactHint = "a add   r reload   esc back   q quit"
 	}
 	if m.screen == setupScreen {
@@ -300,11 +326,12 @@ func compactProviderSummary(provider meter.Snapshot) string {
 }
 
 func compactProviderSummaryAt(provider meter.Snapshot, now time.Time) string {
-	if len(provider.UsageWindows) > 0 {
+	windows := providerSummaryWindows(provider)
+	if len(windows) > 0 {
 		var parts []string
 		seenResets := make(map[int64]bool)
-		limit := min(3, len(provider.UsageWindows))
-		for _, window := range provider.UsageWindows[:limit] {
+		limit := min(3, len(windows))
+		for _, window := range windows[:limit] {
 			name := usageWindowName(window)
 			if provider.Provider == "codex" {
 				name = window.Label
@@ -319,8 +346,8 @@ func compactProviderSummaryAt(provider meter.Snapshot, now time.Time) string {
 			}
 			parts = append(parts, part)
 		}
-		if limit < len(provider.UsageWindows) {
-			parts = append(parts, fmt.Sprintf("+%d", len(provider.UsageWindows)-limit))
+		if limit < len(windows) {
+			parts = append(parts, fmt.Sprintf("+%d", len(windows)-limit))
 		}
 		return strings.Join(parts, "  ")
 	}
@@ -422,13 +449,32 @@ func progressBar(availablePercent float64, width int) string {
 }
 
 func capacityColor(availablePercent float64) lipgloss.AdaptiveColor {
-	if availablePercent <= 0 {
+	switch capacityTierFor(availablePercent) {
+	case capacityCritical:
 		return danger
-	}
-	if availablePercent <= 20 {
+	case capacityWarning:
 		return warn
+	default:
+		return sea
 	}
-	return sea
+}
+
+type capacityTier uint8
+
+const (
+	capacityHealthy capacityTier = iota
+	capacityWarning
+	capacityCritical
+)
+
+func capacityTierFor(availablePercent float64) capacityTier {
+	if availablePercent <= 10 {
+		return capacityCritical
+	}
+	if availablePercent <= 25 {
+		return capacityWarning
+	}
+	return capacityHealthy
 }
 
 func resetRemaining(resetsAt, now time.Time) string {
@@ -539,11 +585,32 @@ func statusStyle(status meter.Status) lipgloss.Style {
 }
 
 func age(value time.Time) string {
-	d := time.Since(value).Round(time.Minute)
+	return ageAt(value, time.Now())
+}
+
+func ageAt(value, now time.Time) string {
+	d := now.Sub(value).Round(time.Minute)
 	if d < time.Minute {
 		return "just now"
 	}
-	return d.String() + " ago"
+	days := int(d / (24 * time.Hour))
+	d -= time.Duration(days) * 24 * time.Hour
+	hours := int(d / time.Hour)
+	d -= time.Duration(hours) * time.Hour
+	minutes := int(d / time.Minute)
+	if days > 0 {
+		if hours > 0 {
+			return fmt.Sprintf("%dd %dh ago", days, hours)
+		}
+		return fmt.Sprintf("%dd ago", days)
+	}
+	if hours > 0 {
+		if minutes > 0 {
+			return fmt.Sprintf("%dh %dm ago", hours, minutes)
+		}
+		return fmt.Sprintf("%dh ago", hours)
+	}
+	return fmt.Sprintf("%dm ago", minutes)
 }
 
 func truncate(value string, width int) string {

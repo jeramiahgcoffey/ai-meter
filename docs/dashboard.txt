@@ -1,9 +1,9 @@
-ai meter  usage  Sep 1 to Sep 14                                              updated 16:32
+ai meter  usage  Sep 1 to Sep 15                                              updated 16:32
 ──────────────────────────────────────────────────────────────────────────────────────────
 ▸ Claude                               ● fresh │ Claude                                ● fresh  just now
-  5h 91% left ↻ 3h 17m  7d 55% left ↻ 2d 5h │ 129.8M tok in   592.9k tok out   439 req
+  7d       55% left ↻ 2d 5h │ Fable 7d 18% left
   Codex                              ● partial │
-  5h 100% left ↻ 2h  7d 31% left ↻ 4d 15h     │ Usage limits
+  7d       31% left ↻ 4d 15h                   │ Usage limits
                                                 │ 5h        █████████████░  91% left
                                                 │           reset in 3h 17m
                                                 │ 7d        ████████░░░░░░  55% left
@@ -12,6 +12,21 @@ ai meter  usage  Sep 1 to Sep 14                                              up
 ──────────────────────────────────────────────────────────────────────────────────────────
  ↑/↓ select   enter details   r refresh   s settings   q quit
 
-The filled portion of each bar is the capacity that remains. Amber marks 20%
-or less. Coral marks an exhausted limit. The selector uses `↻` before the time
-remaining until a limit resets.
+Press `d` to open the active-capacity dashboard:
+
+ai meter  dash                                                             updated 16:32
+──────────────────────────────────────────────────────────────────────────────────────────
+Active capacity  used on this machine · last 5h
+
+● Claude                                                               active 34m ago
+  5h          ███████████░░░░░   68% left  ↻ 2h 40m
+  Fable 7d    ███░░░░░░░░░░░░░   18% left  ↻ 3d 5h
+
+● Codex                                                             active 1h 11m ago
+  7d          █░░░░░░░░░░░░░░░    8% left  ↻ 19h 21m
+──────────────────────────────────────────────────────────────────────────────────────────
+ d all accounts   r refresh   s settings   q quit
+
+The filled portion of each bar is the capacity that remains. Orange marks 11%
+through 25% remaining. Red marks 10% or less. The selector and dashboard use
+`↻` before the time remaining until a limit resets.

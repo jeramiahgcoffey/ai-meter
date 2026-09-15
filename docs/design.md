@@ -43,6 +43,8 @@ Two independent cross-judge runs did not return before their timeout. The direct
 
 The subscription extension compared a generic recursive JSON reader with typed Codex and Claude readers. The typed design won because provider logs contain cumulative counters, nested copies of usage, and arbitrary message content. Each reader decodes only its provider's metadata envelope. Codex response IDs and Claude message IDs remove copied records. Unchanged files reuse an in-memory parse result during TUI refresh.
 
+The active-capacity extension compared a dedicated dashboard with an overview embedded above the account list. The dedicated dashboard won because the overview concerns every active subscription, while the account list and detail pane concern one selected provider. `Snapshot.LastActivityAt` records the newest accepted local usage event. `meter.ActiveSubscriptions` selects recent accounts and their applicable limits, so a later scheduler can use the same policy without importing TUI code. The selector and the dashboard share one remaining-capacity color scale.
+
 ## Tradeoffs accepted
 
 - We store only the latest successful snapshot in exchange for small, atomic cache files.

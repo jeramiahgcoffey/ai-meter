@@ -47,6 +47,7 @@ type screen uint8
 
 const (
 	dashboardScreen screen = iota
+	dashScreen
 	settingsScreen
 	setupScreen
 )
@@ -81,7 +82,7 @@ func newSetupWizard() setupWizard {
 func (m Model) updateSettings(message tea.KeyMsg) (Model, tea.Cmd) {
 	switch message.String() {
 	case "esc", "s":
-		m.screen = dashboardScreen
+		m.screen = m.returnScreen
 	case "q":
 		return m, tea.Quit
 	case "a", "enter":

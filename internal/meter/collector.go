@@ -65,22 +65,11 @@ func (c *Collector) Offline(period Period) Dashboard {
 
 func sortProviders(providers []Snapshot) {
 	sort.SliceStable(providers, func(i, j int) bool {
-		leftRank := ProviderSortRank(providers[i].ID)
-		rightRank := ProviderSortRank(providers[j].ID)
-		if leftRank != rightRank {
-			return leftRank < rightRank
+		leftLabel := strings.ToLower(providers[i].Label)
+		rightLabel := strings.ToLower(providers[j].Label)
+		if leftLabel != rightLabel {
+			return leftLabel < rightLabel
 		}
-		return strings.ToLower(providers[i].Label) < strings.ToLower(providers[j].Label)
+		return providers[i].ID < providers[j].ID
 	})
-}
-
-func ProviderSortRank(id string) int {
-	switch id {
-	case "codex-local", "claude-local":
-		return 0
-	}
-	if strings.HasPrefix(id, "codex-local-") || strings.HasPrefix(id, "claude-local-") {
-		return 2
-	}
-	return 1
 }

@@ -28,6 +28,7 @@ type codexFileCache struct {
 	size      int64
 	modTime   int64
 	records   []codexUsageRecord
+	activity  []time.Time
 	quotas    []codexQuotaRecord
 	malformed int
 }
@@ -96,7 +97,7 @@ func (p *CodexLocal) Fetch(ctx context.Context, period meter.Period) meter.Snaps
 		liveWindows, liveErr = reader(liveCtx, p.Root)
 		cancel()
 	}
-	files, err := localJSONLFiles(ctx, p.Root, "sessions", period.Start)
+	files, err := localJSONLFiles(ctx, p.Root, "sessions", localScanStart(period))
 	if err != nil {
 		return failedLocalSnapshot(snapshot, err)
 	}
@@ -140,6 +141,9 @@ func (p *CodexLocal) Fetch(ctx context.Context, period meter.Period) meter.Snaps
 	malformed := 0
 	for _, cached := range p.files {
 		malformed += cached.malformed
+		for _, at := range cached.activity {
+			noteLocalActivity(&snapshot, at, period.End)
+		}
 		for _, record := range cached.records {
 			if !withinPeriod(record.Timestamp, meterPeriod{start: period.Start, end: period.End}) {
 				continue
@@ -223,6 +227,9 @@ func parseCodexFile(ctx context.Context, path string) (codexFileCache, error) {
 			}
 		case event.Type == "token_usage_record":
 			result.records = append(result.records, codexUsageRecord{ID: event.Payload.ResponseID, Timestamp: timestamp, Model: model, Usage: event.Payload.Usage})
+			if codexUsagePresent(event.Payload.Usage) {
+				result.activity = append(result.activity, timestamp)
+			}
 		case event.Type == "event_msg" && event.Payload.Type == "token_count":
 			if event.Payload.RateLimits != nil {
 				result.quotas = append(result.quotas, codexQuotaRecord{Timestamp: timestamp, Limits: *event.Payload.RateLimits})
@@ -234,6 +241,7 @@ func parseCodexFile(ctx context.Context, path string) (codexFileCache, error) {
 			}
 			if codexUsagePresent(delta) {
 				fallback = append(fallback, codexUsageRecord{Timestamp: timestamp, Model: model, Usage: delta})
+				result.activity = append(result.activity, timestamp)
 			}
 			previous = &current
 		}

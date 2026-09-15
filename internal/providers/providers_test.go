@@ -124,6 +124,9 @@ func TestClaudeLocalReadsTypedMetadataAndDeduplicatesResponses(t *testing.T) {
 	if got.Status != meter.Fresh || got.InputTokens.Value != 115 || got.OutputTokens.Value != 25 || got.Requests.Value != 1 {
 		t.Fatalf("unexpected local usage: %+v", got)
 	}
+	if got.LastActivityAt == nil || !got.LastActivityAt.Equal(time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("Claude last activity = %v", got.LastActivityAt)
+	}
 	if len(got.Models) != 1 || got.Models[0].ID != "claude-fable-5-1" || len(got.Models[0].Details) != 2 {
 		t.Fatalf("unexpected model details: %+v", got.Models)
 	}
@@ -166,6 +169,29 @@ func TestClaudeLocalReadsCachedSubscriptionWindows(t *testing.T) {
 	}
 }
 
+func TestClaudeActivityCanCrossTheReportPeriodBoundary(t *testing.T) {
+	root := t.TempDir()
+	sessionDir := filepath.Join(root, "projects", "one")
+	if err := os.MkdirAll(sessionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data := `{"timestamp":"2026-08-31T23:30:00Z","type":"assistant","uuid":"u1","message":{"id":"m1","model":"claude-fable-5-1","usage":{"input_tokens":10,"output_tokens":2}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(sessionDir, "one.jsonl"), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	period := meter.Period{
+		Start: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+		End:   time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC),
+	}
+	got := (&ClaudeLocal{InstanceID: "claude-local", Label: "Claude", Root: root}).Fetch(context.Background(), period)
+	if got.LastActivityAt == nil || !got.LastActivityAt.Equal(time.Date(2026, 8, 31, 23, 30, 0, 0, time.UTC)) {
+		t.Fatalf("cross-boundary activity = %v", got.LastActivityAt)
+	}
+	if got.InputTokens.Value != 0 || got.OutputTokens.Value != 0 || got.Requests.Value != 0 {
+		t.Fatalf("cross-boundary activity changed report totals: %+v", got)
+	}
+}
+
 func TestCodexLocalUsesResponseUsageAndActualQuotaShape(t *testing.T) {
 	root := t.TempDir()
 	sessionDir := filepath.Join(root, "sessions", "2026", "09", "02")
@@ -184,6 +210,9 @@ func TestCodexLocalUsesResponseUsageAndActualQuotaShape(t *testing.T) {
 	got := provider.Fetch(context.Background(), testPeriod())
 	if got.Status != meter.Fresh || got.InputTokens.Value != 100 || got.OutputTokens.Value != 25 || got.Requests.Value != 1 {
 		t.Fatalf("unexpected Codex usage: %+v", got)
+	}
+	if got.LastActivityAt == nil || !got.LastActivityAt.Equal(time.Date(2026, 9, 2, 12, 0, 2, 0, time.UTC)) {
+		t.Fatalf("Codex last activity = %v", got.LastActivityAt)
 	}
 	if len(got.Models) != 1 || got.Models[0].ID != "gpt-5.6-sol" || got.Models[0].Details[0].Value.Value != 20 {
 		t.Fatalf("unexpected Codex model usage: %+v", got.Models)
@@ -227,7 +256,7 @@ func TestCodexLiveUsageWindowsPreserveLimitScopes(t *testing.T) {
 	}}
 
 	windows := codexLiveUsageWindows(response, time.Unix(reset-60, 0))
-	if len(windows) != 2 {
+	if len(windows) != 3 {
 		t.Fatalf("windows = %+v", windows)
 	}
 	if windows[0].Label != "5h" || windows[0].Scope != spark || windows[0].AvailablePercent != 78 {
@@ -235,6 +264,9 @@ func TestCodexLiveUsageWindowsPreserveLimitScopes(t *testing.T) {
 	}
 	if windows[1].LimitID != "codex" || windows[1].UsedPercent != 13 || windows[1].AvailablePercent != 87 {
 		t.Fatalf("general 7-day limit = %+v", windows[1])
+	}
+	if windows[2].LimitID != "codex_bengalfox" || windows[2].AvailablePercent != 93 {
+		t.Fatalf("scoped 7-day limit was discarded: %+v", windows[2])
 	}
 }
 

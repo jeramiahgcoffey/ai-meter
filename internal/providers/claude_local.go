@@ -98,7 +98,7 @@ func (p *ClaudeLocal) Fetch(ctx context.Context, period meter.Period) meter.Snap
 		snapshot.Issues = append(snapshot.Issues, usageErr.Error())
 		snapshot.Status = meter.Partial
 	}
-	files, err := localJSONLFiles(ctx, p.Root, "projects", period.Start)
+	files, err := localJSONLFiles(ctx, p.Root, "projects", localScanStart(period))
 	if err != nil {
 		return failedLocalSnapshot(snapshot, err)
 	}
@@ -141,14 +141,15 @@ func (p *ClaudeLocal) Fetch(ctx context.Context, period meter.Period) meter.Snap
 	for _, cached := range p.files {
 		malformed += cached.malformed
 		for _, record := range cached.records {
-			if !withinPeriod(record.Timestamp, meterPeriod{start: period.Start, end: period.End}) {
-				continue
-			}
 			if record.ID != "" && seen[record.ID] {
 				continue
 			}
 			if record.ID != "" {
 				seen[record.ID] = true
+			}
+			noteLocalActivity(&snapshot, record.Timestamp, period.End)
+			if !withinPeriod(record.Timestamp, meterPeriod{start: period.Start, end: period.End}) {
+				continue
 			}
 			model := record.Model
 			if model == "" {

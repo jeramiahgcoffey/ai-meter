@@ -107,3 +107,15 @@ func TestSettingsAndWizardFitNarrowTerminal(t *testing.T) {
 	model.wizard.credentialRef = strings.Repeat("LONG_SECRET_FILE_NAME", 4)
 	assertViewFits(t, model.View(), 40)
 }
+
+func TestSettingsReturnsToDash(t *testing.T) {
+	model := New(meter.Dashboard{}, nil, WithSettings(SettingsController{
+		Load: func() SettingsSnapshot { return SettingsSnapshot{} },
+	}))
+	model.screen = dashScreen
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	updated, _ = updated.(Model).Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if updated.(Model).screen != dashScreen {
+		t.Fatalf("settings returned to screen %d", updated.(Model).screen)
+	}
+}

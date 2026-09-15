@@ -33,6 +33,10 @@ go run ./cmd/ai-meter --demo
 
 If you installed the binary, replace `go run ./cmd/ai-meter` in the examples below with `ai-meter`.
 
+Press `d` to switch between the account list and the active-capacity dashboard. The dashboard shows the most useful limits for local subscriptions used on this machine in the last five hours: Claude's 5-hour and Fable limits, and Codex's general 7-day limit.
+
+The account selector uses weekly limits for comparison. Claude shows both its general 7-day and Fable 7-day limits. Codex shows its general 7-day limit. Accounts are sorted alphabetically by label.
+
 Use the arrow keys or `j` and `k` to select a provider. Press `r` to refresh and `s` to open settings. In an 80-column terminal, press `Enter` to open the selected provider's details.
 
 The settings page lists detected profiles, loaded config files, and credential references. Press `a` to add an OpenAI or Anthropic organization account without leaving the TUI. See [Configure accounts in the TUI](docs/settings.md) for the complete flow.
@@ -162,10 +166,10 @@ This version reads API organization data and local subscription usage metadata. 
 
 - OpenAI uses the organization [Usage API and Costs endpoint](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage). Both require an admin key. Usage is grouped by the provider model ID.
 - Anthropic uses the organization [Messages Usage Report](https://platform.claude.com/docs/en/api/admin-api/usage-cost/get-messages-usage-report) and [Cost Report](https://platform.claude.com/docs/en/api/admin-api/usage-cost/get-cost-report). Both require an Admin API key.
-- Codex local rows ask the installed Codex app server for current subscription limits through `account/rateLimits/read`. The app server uses the existing login for each detected Codex home. If several buckets cover the same duration, the dashboard shows the bucket with the least capacity left. Local session logs provide per-model token totals and an offline quota fallback. `ai-meter` checks that `auth.json` exists but never parses or copies its credentials.
+- Codex local rows ask the installed Codex app server for current subscription limits through `account/rateLimits/read`. The app server uses the existing login for each detected Codex home. The account list shows the general 7-day limit and omits the model-scoped Spark limit. The detail view keeps the most constrained bucket for each duration. Local session logs provide per-model token totals, recent activity, and an offline quota fallback. `ai-meter` checks that `auth.json` exists but never parses or copies its credentials.
 - Claude local rows read the 5-hour, 7-day, and Fable 7-day subscription limits cached by Claude Code. They also read typed assistant usage records, deduplicate copied response IDs, and show model and cache details. Claude Pro is a separate consumer subscription and [does not include API usage](https://support.anthropic.com/en/articles/8325606-what-is-the-pro-plan).
 
-Local token totals mean "observed on this machine." They can omit work done on another computer, and they are not invoices. Codex limit percentages come from the account service and cover the detected subscription. Parsers retain only timestamps, model IDs, token counters, response IDs used for deduplication, and Codex rate-limit fields. Prompt text, responses, tool payloads, and OAuth values never enter a snapshot or cache file.
+Local token totals and recent activity mean "observed on this machine." They can omit work done on another computer, and they are not invoices. Codex limit percentages come from the account service and cover the detected subscription. Parsers retain only timestamps, model IDs, token counters, response IDs used for deduplication, and Codex rate-limit fields. Prompt text, responses, tool payloads, and OAuth values never enter a snapshot or cache file.
 
 The clean next provider is GitHub Copilot because GitHub now exposes [personal and organization AI-credit billing endpoints](https://docs.github.com/en/rest/billing/usage). Gemini needs a Google Cloud Billing adapter, which has a broader credential and project model.
 

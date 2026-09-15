@@ -47,22 +47,23 @@ const (
 )
 
 type Snapshot struct {
-	ID           string        `json:"id"`
-	Provider     string        `json:"provider"`
-	Label        string        `json:"label"`
-	Period       Period        `json:"period"`
-	ObservedAt   time.Time     `json:"observed_at"`
-	Status       Status        `json:"status"`
-	Spend        Value         `json:"spend"`
-	Budget       Value         `json:"budget"`
-	InputTokens  Value         `json:"input_tokens"`
-	OutputTokens Value         `json:"output_tokens"`
-	Requests     Value         `json:"requests"`
-	UsageWindows []UsageWindow `json:"usage_windows,omitempty"`
-	Models       []ModelUsage  `json:"models,omitempty"`
-	Details      []Metric      `json:"details,omitempty"`
-	Source       string        `json:"source"`
-	Issues       []string      `json:"issues,omitempty"`
+	ID             string        `json:"id"`
+	Provider       string        `json:"provider"`
+	Label          string        `json:"label"`
+	Period         Period        `json:"period"`
+	ObservedAt     time.Time     `json:"observed_at"`
+	LastActivityAt *time.Time    `json:"last_activity_at,omitempty"`
+	Status         Status        `json:"status"`
+	Spend          Value         `json:"spend"`
+	Budget         Value         `json:"budget"`
+	InputTokens    Value         `json:"input_tokens"`
+	OutputTokens   Value         `json:"output_tokens"`
+	Requests       Value         `json:"requests"`
+	UsageWindows   []UsageWindow `json:"usage_windows,omitempty"`
+	Models         []ModelUsage  `json:"models,omitempty"`
+	Details        []Metric      `json:"details,omitempty"`
+	Source         string        `json:"source"`
+	Issues         []string      `json:"issues,omitempty"`
 }
 
 type UsageWindow struct {

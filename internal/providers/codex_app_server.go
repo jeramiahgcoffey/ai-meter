@@ -166,5 +166,5 @@ func codexLiveUsageWindows(response codexRateLimitsResponse, observedAt time.Tim
 		}
 		return result[i].Scope < result[j].Scope
 	})
-	return effectiveUsageWindows(result)
+	return result
 }

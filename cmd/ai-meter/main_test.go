@@ -6,7 +6,7 @@ import (
 	"github.com/jeramiahgcoffey/ai-meter/internal/config"
 )
 
-func TestSettingsSnapshotUsesDashboardProviderOrder(t *testing.T) {
+func TestSettingsSnapshotSortsProvidersAlphabetically(t *testing.T) {
 	resolution := config.Resolution{Config: config.Config{Providers: []config.Provider{
 		{ID: "codex-local-alt", Label: "Codex alt"},
 		{ID: "openai", Label: "OpenAI API"},
@@ -16,7 +16,7 @@ func TestSettingsSnapshotUsesDashboardProviderOrder(t *testing.T) {
 	}}}
 
 	got := settingsSnapshot(resolution)
-	want := []string{"Claude", "Codex", "OpenAI API", "Claude alt", "Codex alt"}
+	want := []string{"Claude", "Claude alt", "Codex", "Codex alt", "OpenAI API"}
 	if len(got.Providers) != len(want) {
 		t.Fatalf("providers = %+v", got.Providers)
 	}

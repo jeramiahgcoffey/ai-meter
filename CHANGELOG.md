@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.1 - 2026-09-18
+
+- Show GLM plan windows in the account selector and capacity dashboard by treating a GLM-scoped limit as the general scope for Claude homes that run against z.ai.
+
 ## v0.4.0 - 2026-09-18
 
 - Add GLM plan capacity for Claude homes that run on z.ai: 5-hour and weekly windows from z.ai's monitor API.

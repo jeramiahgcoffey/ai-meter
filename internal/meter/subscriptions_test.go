@@ -5,6 +5,23 @@ import (
 	"time"
 )
 
+func TestZaiPlanLimitsAppearInSummaries(t *testing.T) {
+	snapshot := Snapshot{Provider: "claude", Label: "GLM", UsageWindows: []UsageWindow{
+		{Label: "5h", Scope: "GLM", WindowMinutes: 300, AvailablePercent: 94},
+		{Label: "7d", Scope: "GLM", WindowMinutes: 10080, AvailablePercent: 99},
+		{Label: "7d", Scope: "Mystery", LimitID: "third-party", WindowMinutes: 10080, AvailablePercent: 10},
+	}}
+
+	applicable := ApplicableSubscriptionLimits(snapshot)
+	if len(applicable) != 2 || applicable[0].Label != "5h" || applicable[0].Scope != "GLM" || applicable[1].Label != "7d" {
+		t.Fatalf("GLM applicable limits = %+v", applicable)
+	}
+	summary := SubscriptionSummaryLimits(snapshot)
+	if len(summary) != 1 || summary[0].Label != "7d" || summary[0].Scope != "GLM" {
+		t.Fatalf("GLM summary limits = %+v", summary)
+	}
+}
+
 func TestActiveSubscriptionsSelectApplicableLimits(t *testing.T) {
 	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 	recent := now.Add(-2 * time.Hour)

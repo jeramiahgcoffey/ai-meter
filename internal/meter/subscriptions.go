@@ -42,10 +42,10 @@ func ApplicableSubscriptionLimits(snapshot Snapshot) []UsageWindow {
 		sevenDay := window.WindowMinutes == 10080 || window.WindowMinutes == 0 && strings.EqualFold(window.Label, "7d")
 		switch snapshot.Provider {
 		case "claude":
-			if fiveHour && (window.Scope == "" || strings.EqualFold(window.Scope, "claude")) {
+			if fiveHour && claudeGeneralScope(window.Scope) {
 				result = append(result, window)
 			}
-			if sevenDay && strings.Contains(scope, "fable") {
+			if sevenDay && (strings.Contains(scope, "fable") || strings.EqualFold(window.Scope, "glm")) {
 				result = append(result, window)
 			}
 		case "codex":
@@ -58,9 +58,17 @@ func ApplicableSubscriptionLimits(snapshot Snapshot) []UsageWindow {
 	return result
 }
 
+// claudeGeneralScope reports whether a window's scope is a general Claude
+// limit or a GLM plan limit, which acts as the general scope for Claude
+// homes that run against z.ai.
+func claudeGeneralScope(scope string) bool {
+	return scope == "" || strings.EqualFold(scope, "claude") || strings.EqualFold(scope, "glm")
+}
+
 // SubscriptionSummaryLimits selects weekly limits for compact account rows.
-// Claude keeps both the general and Fable weekly limits. Codex keeps only the
-// general weekly limit, not a model-scoped limit such as Spark.
+// Claude keeps both the general and Fable weekly limits, treating a GLM plan
+// limit as the general scope for homes that run against z.ai. Codex keeps
+// only the general weekly limit, not a model-scoped limit such as Spark.
 func SubscriptionSummaryLimits(snapshot Snapshot) []UsageWindow {
 	var result []UsageWindow
 	for _, window := range snapshot.UsageWindows {
@@ -71,7 +79,7 @@ func SubscriptionSummaryLimits(snapshot Snapshot) []UsageWindow {
 		scope := strings.ToLower(window.Scope + " " + window.LimitID)
 		switch snapshot.Provider {
 		case "claude":
-			general := window.Scope == "" || strings.EqualFold(window.Scope, "claude")
+			general := claudeGeneralScope(window.Scope)
 			if general || strings.Contains(scope, "fable") {
 				result = append(result, window)
 			}

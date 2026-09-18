@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.0 - 2026-09-18
+
+- Add GLM plan capacity for Claude homes that run on z.ai: 5-hour and weekly windows from z.ai's monitor API.
+- Retype a discovered profile with a `zai-local` config overlay; the z.ai key comes from `ZAI_API_KEY` or the macOS Keychain service `zai-api-key`.
+- Keep local token totals and mark the provider partial when the plan quota is unavailable or the key is missing.
+
 ## v0.3.0 - 2026-09-15
 
 - Add an active-capacity dashboard for local subscriptions used in the last five hours.

@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -187,11 +189,30 @@ func makeProviders(cfg config.Config) ([]meter.Provider, error) {
 			result = append(result, &providers.CodexLocal{InstanceID: item.ID, Label: item.Label, Root: item.LocalRoot})
 		case "claude-local":
 			result = append(result, &providers.ClaudeLocal{InstanceID: item.ID, Label: item.Label, Root: item.LocalRoot})
+		case "zai-local":
+			result = append(result, &providers.ZaiLocal{ClaudeLocal: providers.ClaudeLocal{InstanceID: item.ID, Label: item.Label, Root: item.LocalRoot}, Key: resolveZaiKey()})
 		default:
 			return nil, fmt.Errorf("unsupported provider kind %q", item.Kind)
 		}
 	}
 	return result, nil
+}
+
+// resolveZaiKey finds the z.ai credential the same way the claude-zai
+// launcher does: the environment first, then the macOS Keychain service
+// "zai-api-key". An empty result leaves the provider token-only.
+func resolveZaiKey() string {
+	if value, ok := os.LookupEnv("ZAI_API_KEY"); ok && value != "" {
+		return value
+	}
+	if runtime.GOOS != "darwin" {
+		return ""
+	}
+	out, err := exec.Command("security", "find-generic-password", "-s", "zai-api-key", "-w").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 type stringList []string

@@ -30,6 +30,14 @@ The parsers use provider-specific structs. Codex accepts `turn_context`, `token_
 
 `ClaudeLocal` reads `cachedUsageUtilization` from the profile's `.claude.json`. Claude Code writes the account-wide 5-hour and 7-day utilization to this object. The `limits` array contains model-scoped limits such as Fable's 7-day utilization. ai-meter reads only the percentages, reset times, model IDs, display names, and fetch time.
 
+`ZaiLocal` covers a Claude home that runs on z.ai's Anthropic-compatible GLM endpoint. Such a home has no cached Anthropic limits, so a config overlay retypes the discovered profile and the provider composes the Claude session scan with z.ai's monitor API:
+
+```json
+{"providers":[{"id":"claude-local-zai","kind":"zai-local","label":"GLM"}]}
+```
+
+The key is resolved the same way the `claude-zai` launcher resolves it: `ZAI_API_KEY` first, then the macOS Keychain service `zai-api-key`. It is sent only to `GET https://api.z.ai/api/monitor/usage/quota/limit` and never stored or logged. The response's limit buckets map onto the shared usage windows — unit 3 with number 5 is the 5-hour cycle and unit 6 with number 1 is the weekly cycle, for both credit and token plans. A missing key or a failed quota request marks the provider partial and keeps the local token totals.
+
 Each provider caches parsed metadata by file path, size, and modification time for the life of the process. A refresh reuses unchanged files. Context cancellation is checked during directory walking and line scanning. Files older than the requested period are skipped by modification time.
 
 Subscription windows remain separate from dollar budgets. The TUI reports capacity left for both providers. Local token totals are machine-observed activity, not invoices.
@@ -47,6 +55,7 @@ The final design kept the generic candidate's working admin adapters, config pre
 - We rescan a changed file from its beginning in exchange for a small cache with no persistent index migration.
 - We retain unknown Codex model rows when old records cannot be attributed honestly.
 - We use Claude Code's last cached subscription limits instead of scraping the `/usage` screen.
+- We read the z.ai key from the environment or the macOS Keychain to call z.ai's monitor API because z.ai has no local client process that owns credentials on our behalf; the key travels only to the monitor endpoint.
 
 ## Alternatives considered
 

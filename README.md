@@ -33,9 +33,9 @@ go run ./cmd/ai-meter --demo
 
 If you installed the binary, replace `go run ./cmd/ai-meter` in the examples below with `ai-meter`.
 
-Press `d` to switch between the account list and the active-capacity dashboard. The dashboard shows the most useful limits for local subscriptions used on this machine in the last five hours: Claude's 5-hour and Fable limits, and Codex's general 7-day limit.
+Press `d` to switch between the account list and the active-capacity dashboard. The dashboard shows the most useful limits for local subscriptions used on this machine in the last five hours: Claude's 5-hour and Fable limits, and Codex's general 7-day limit. A Claude home that runs on z.ai's GLM endpoint can also report 5-hour and weekly plan capacity once its profile is retyped with a `zai-local` config overlay and the z.ai key is available through `ZAI_API_KEY` or the macOS Keychain. See [Subscription sources](docs/subscription-sources.md).
 
-The account selector uses weekly limits for comparison. Claude shows both its general 7-day and Fable 7-day limits. Codex shows its general 7-day limit. Accounts are sorted alphabetically by label.
+The account selector uses weekly limits for comparison. Claude shows both its general 7-day and Fable 7-day limits. Codex shows its general 7-day limit. GLM shows its weekly plan window. Accounts are sorted alphabetically by label.
 
 Use the arrow keys or `j` and `k` to select a provider. Press `r` to refresh and `s` to open settings. In an 80-column terminal, press `Enter` to open the selected provider's details.
 

@@ -131,6 +131,35 @@ func TestResolveNamesBaseLocalHomesWithoutDefault(t *testing.T) {
 	}
 }
 
+func TestZaiLocalKindFollowsLocalProviderRules(t *testing.T) {
+	home := t.TempDir()
+	zaiHome := filepath.Join(home, ".claude-zai")
+	if err := os.MkdirAll(filepath.Join(zaiHome, "projects"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(zaiHome, "settings.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	// Write the overlay raw: a standalone zai-local entry has no local_root
+	// and only becomes valid after merging with the discovered home.
+	writeRawConfig(t, filepath.Join(work, ".ai-meter.json"), `{"providers":[{"id":"claude-local-zai","kind":"zai-local","label":"GLM"}]}`)
+	got, err := Resolve(ResolveOptions{HomeDir: home, WorkDir: work, LookupEnv: func(string) (string, bool) { return "", false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Config.Providers) != 1 {
+		t.Fatalf("providers = %+v", got.Config.Providers)
+	}
+	if got.Config.Providers[0].Kind != "zai-local" || got.Config.Providers[0].LocalRoot == "" {
+		t.Fatalf("overlay must retype the discovered home while keeping its local root: %+v", got.Config.Providers[0])
+	}
+	credential := Config{Providers: []Provider{{ID: "claude-local-zai", Kind: "zai-local", Label: "GLM", LocalRoot: zaiHome, CredentialEnv: "ZAI_API_KEY"}}}
+	if err := Validate(credential); err == nil {
+		t.Fatal("zai-local must not accept credential fields; the key comes from the environment or Keychain")
+	}
+}
+
 func writeTestConfig(t *testing.T, path string, cfg Config) {
 	t.Helper()
 	if err := Write(path, cfg); err != nil {

@@ -229,7 +229,7 @@ func Validate(cfg Config) error {
 
 func localProviderKind(kind string) bool {
 	switch strings.ToLower(kind) {
-	case "codex-local", "claude-local":
+	case "codex-local", "claude-local", "zai-local":
 		return true
 	default:
 		return false
